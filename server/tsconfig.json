@@ -1,0 +1,65 @@
+{
+  "compilerOptions": {
+    // JavaScript Target
+    "target": "ES2020",              
+
+    // Module system (CommonJS for Node.js)
+    "module": "commonjs",            
+
+    // Enable default import compatibility
+    "esModuleInterop": true,         
+    "allowSyntheticDefaultImports": true,
+
+    // Type checking
+    "strict": true,                  
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Additional strict checks (optional but recommended)
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+
+    // Skip type checking of all declaration files
+    "skipLibCheck": true,            
+
+    // Output directory for compiled JS
+    "outDir": "./dist",              
+    "rootDir": "./",
+
+    // Source maps
+    "sourceMap": true,              
+
+    // Generate declaration files
+    "declaration": true,
+    "declarationMap": true,
+    "declarationDir": "./dist/types",
+
+    // Module resolution
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+
+    // Force consistent file naming
+    "forceConsistentCasingInFileNames": true,
+
+    // Additional helpful options
+    "removeComments": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+
+  // More specific includes
+  "include": [
+    "server/**/*.ts",
+    "src/**/*.ts",
+    "*.ts"
+  ],
+
+  // More comprehensive excludes
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}
