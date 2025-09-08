@@ -7,18 +7,20 @@ import { authenticateJWT  ,DecodedToken} from "../middleware/auth";
 const JWT_SECRET: string = process.env.JWT_SECRET || "your_jwt_secret";
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
 
+
 interface User {
   user_id: number;
   name: string;
   email: string;
   mobile_number?: string;
   profile_picture: string;
-  password_hash?: string;
+  password_hash?: string;  /// ? question mark use jb htoa hai jb  filed ka hona or na hona matter nahi  kr ta hai 
   role: 'Admin' | 'Teacher' | 'Student';
   status: 'Active' | 'Inactive';
   created_at: string;
   updated_at: string;
 }
+
 interface UserRow {
   user_id: number;
   name: string;
@@ -41,6 +43,7 @@ export const registerUser = async (req: Request, res: Response): Promise<Respons
       mobileNumber?: string;
     };
 
+    
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
     }
