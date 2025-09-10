@@ -49,16 +49,9 @@ export const manageStudents =async (req:Request,res:Response): Promise<Response>
         return res.status(404).json({
             message:"user not found ",
             status: false
-        })
+        }) }
 
-
-
-    }
-
-
-
-
-                const updateFields: Partial<User> = {};
+      const updateFields: Partial<User> = {};
 
 
 
