@@ -2,8 +2,6 @@ import { Request, Response } from "express";
 import { sql } from "../db/inidex";
 
 // =========================
-// Create Student Profile
-// =========================
 export const createStudentProfile = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { studentId, rollNumber, classId, sectionId, dob, guardianName, guardianMobileNumber, studentMobileNumber } = req.body;

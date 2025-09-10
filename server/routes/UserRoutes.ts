@@ -1,4 +1,4 @@
-import { getAllUserData, manageStudents } from "../controlers/ManageUser";
+import { getAllUserData, manageStudents ,addUserByAdmin} from "../controlers/ManageUser";
 import { authenticateAdmin } from "../middleware/AdminAuth";
 import { authenticateJWT  ,DecodedToken} from "../middleware/auth";
 import {  addStudentProfile } from "../controlers/Profiles";
@@ -9,9 +9,10 @@ import express, { Request, Response } from "express";
 const userRouter = express.Router();
 
 
-
+/////// manage user ///////////////////////
 userRouter.post("/getrolebaseuser", getAllUserData )
 userRouter.post("/manageuser", authenticateAdmin, manageStudents)
+userRouter.post("/addUserByAdmin", addUserByAdmin )
 
 userRouter.post("/addStudentProfile",authenticateJWT,addStudentProfile)
 

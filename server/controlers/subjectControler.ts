@@ -1,9 +1,7 @@
 import { Request, Response } from "express";
 import { sql } from "../db/inidex";
 
-// =========================
-// Create Subject
-// =========================
+
 export const createSubject = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { classId, subjectName, subjectTeacherId } = req.body;
