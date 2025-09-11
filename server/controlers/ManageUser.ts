@@ -26,7 +26,7 @@ interface User {
 export const manageStudents =async (req:Request,res:Response): Promise<Response> => {
    
     try{
-        
+        console.log(req.body)
             const { status  ,user_id , mobile_number,role, name, email } =  req.body as any
 
             const parsedUserId = Number(user_id?.toString().trim())

@@ -11,7 +11,7 @@ const userRouter = express.Router();
 
 /////// manage user ///////////////////////
 userRouter.post("/getrolebaseuser", getAllUserData )
-userRouter.post("/manageuser", manageStudents)
+userRouter.post("/manageuser",authenticateJWT, manageStudents)
 userRouter.post("/addUserByAdmin", addUserByAdmin )
 
 userRouter.post("/addStudentProfile",authenticateJWT,addStudentProfile)
