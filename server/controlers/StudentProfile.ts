@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { sql } from "../db/inidex";
 
-// =========================
 export const createStudentProfile = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { studentId, rollNumber, classId, sectionId, dob, guardianName, guardianMobileNumber, studentMobileNumber } = req.body;
@@ -28,9 +27,7 @@ export const createStudentProfile = async (req: Request, res: Response): Promise
   }
 };
 
-// =========================
-// Get All Student Profiles
-// =========================
+
 export const getAllStudentProfiles = async (_req: Request, res: Response): Promise<Response> => {
   try {
     const students = await sql`

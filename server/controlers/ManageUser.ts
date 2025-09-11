@@ -234,14 +234,12 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Validate role
     if (!['Admin', 'Teacher', 'Student'].includes(role)) {
       return res.status(400).json({ 
         error: "Role must be Admin, Teacher, or Student" 
       });
     }
 
-    // Check if user already exists
     const existingUser = await sql`
       SELECT email FROM users WHERE email = ${email}
     `;
@@ -252,11 +250,9 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Hash default password
     const defaultPassword = "1234567890";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // Insert user into users table
     const userResult = await sql`
       INSERT INTO users (
         name, 
