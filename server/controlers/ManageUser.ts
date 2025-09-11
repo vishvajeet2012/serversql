@@ -108,36 +108,94 @@ export const manageStudents =async (req:Request,res:Response): Promise<Response>
 
 
 export const getAllUserData = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { role } = req.body;
+    
+    if (!role) {
+      return res.status(400).json({ 
+        message: "Role is required", 
+        status: false 
+      });
+    }
 
-  try{
-  const {role}= req.body
-          if(!role){
-   return res.status(400).json({  message: "Role is required",status: false })}
-
-             const validRoles = ['Admin', 'Teacher', 'Student'];
+    const validRoles = ['Admin', 'Teacher', 'Student'];
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ message: "Invalid role. role must be  Admin, Teacher, or Student", status: false
+      return res.status(400).json({ 
+        message: "Invalid role. Role must be Admin, Teacher, or Student", 
+        status: false
       });
     }  
 
-     const users = await sql`
+    const users = await sql`
       SELECT user_id, name, email, mobile_number, profile_picture,
              role, status, created_at, updated_at
       FROM users
       WHERE role = ${role}
       ORDER BY created_at DESC
-    ` as User[];
+    `;
 
-     return res.status(200).json({
-      message: `${role} users data  successfully fetch`,  status: true,user: users,count: users.length  });
+    if (!users || users.length === 0) {
+      return res.status(404).json({ 
+        message: `No ${role}s found`, 
+        status: false 
+      });
+    }
 
+    const usersWithProfiles = await Promise.all(
+      users.map(async (user: any) => {
+        let profileData: any = null;
 
-}catch(error){
-  console.log(error,"get all user api not working")
- return res.status(500).json({message:"internal  server error"  ,status:false,  error:error})
-}
-}
+        if (user.role === "Student") {
+          const studentProfile = await sql`
+            SELECT sp.student_id, sp.roll_number, sp.class_id, sp.section_id, sp.dob,
+                   sp.guardian_name, sp.guardian_mobile_number, sp.student_mobile_number,
+                   sp.created_at, sp.updated_at,
+                   c.class_name,
+                   s.section_name
+            FROM student_profile sp
+            JOIN class c ON sp.class_id = c.class_id
+            JOIN section s ON sp.section_id = s.section_id
+            WHERE sp.student_id = ${user.user_id}
+          `;
+          profileData = studentProfile[0] || null;
+        }
 
+        if (user.role === "Teacher") {
+          const teacherProfile = await sql`
+            SELECT tp.teacher_id, tp.assigned_subjects, tp.class_assignments,
+                   tp.created_at, tp.updated_at
+            FROM teacher_profile tp
+            WHERE tp.teacher_id = ${user.user_id}
+          `;
+          profileData = teacherProfile[0] || null;
+        }
+
+        if (user.role === "Admin") {
+          profileData = null;
+        }
+
+        return {
+          ...user,
+          profile: profileData
+        };
+      })
+    );
+
+    return res.status(200).json({
+      message: `${role} users data successfully fetched`,
+      status: true,
+      users: usersWithProfiles,
+      count: usersWithProfiles.length
+    });
+
+  } catch (error) {
+    console.log(error, "get all user api not working");
+    return res.status(500).json({
+      message: "Internal server error",
+      status: false,
+    });
+  }
+};
 
 export const addUserByAdmin = async (req: Request, res: Response): Promise<Response> => {
   try {
