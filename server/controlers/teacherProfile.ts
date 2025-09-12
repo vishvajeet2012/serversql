@@ -30,9 +30,7 @@ export const createTeacherProfile = async (req: Request, res: Response): Promise
   }
 };
 
-// =========================
-// Get All Teacher Profiles
-// =========================
+
 export const getAllTeacherProfiles = async (_req: Request, res: Response): Promise<Response> => {
   try {
     const teachers = await sql`
@@ -52,9 +50,51 @@ export const getAllTeacherProfiles = async (_req: Request, res: Response): Promi
     return res.status(500).json({ error: "Internal server error" });
   }
 };
-// =========================
-// Get Teacher Profile by ID
-// =========================
+
+      export const searchTeachersByName = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { name } = req.body;
+        
+    if (!name || typeof name !== 'string') {
+    
+      return res.status(400).json({ 
+        error: "Name parameter is required and must be a string" 
+      });
+    }
+
+    const searchName = name.trim();
+    
+    if (searchName.length === 0) {
+      return res.status(400).json({ 
+        error: "Name parameter cannot be empty" 
+      });
+    }
+
+    const teachers = await sql`
+      SELECT 
+        tp.teacher_id,
+        u.name,
+        u.mobile_number,
+        u.email
+      FROM teacher_profile tp
+      INNER JOIN users u ON tp.teacher_id = u.user_id
+      WHERE LOWER(u.name) LIKE LOWER(${'%' + searchName + '%'})
+      ORDER BY u.name;
+    `;
+    
+    return res.status(200).json({ 
+      data: teachers,
+      count: teachers.length,
+      searchTerm: searchName
+    });
+  } catch (error) {
+    console.error("Error searching teacher profiles:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+
 export const getTeacherProfileById = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
