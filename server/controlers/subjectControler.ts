@@ -95,9 +95,7 @@ export const updateSubject = async (req: Request, res: Response): Promise<Respon
   }
 };
 
-// =========================
-// Delete Subject
-// =========================
+
 export const deleteSubject = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;

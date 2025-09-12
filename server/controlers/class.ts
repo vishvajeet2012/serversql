@@ -4,23 +4,45 @@ import { sql } from "../db/inidex";
 
 export const createClass = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { className, description } = req.body;
+    const { className, description, section_name, class_teacher_id } = req.body;
 
     if (!className) {
       return res.status(400).json({ error: "className is required" });
     }
 
-    const result = await sql`  INSERT INTO class (class_name, description) VALUES (${className}, ${description}) RETURNING *;`;
+    const classResult = await sql`
+      INSERT INTO class (class_name, description) 
+      VALUES (${className}, ${description}) 
+      RETURNING *;
+    `;
+
+    const createdClass = classResult[0];
+    let createdSection = null;
+
+    if (section_name) {
+      const sectionResult = await sql`
+        INSERT INTO section (class_id, section_name, class_teacher_id) 
+        VALUES (${createdClass?.class_id}, ${section_name}, ${class_teacher_id || null}) 
+        RETURNING *;
+      `;
+      
+      createdSection = sectionResult[0];
+    }
 
     return res.status(201).json({
       message: "Class created successfully",
-      data: result[0],
+      data: {
+        class: createdClass,
+        section: createdSection
+      },
     });
   } catch (error) {
     console.error("Error creating class:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
 
 
 
@@ -126,3 +148,38 @@ export const searchClassBySectionWithQuery = async (req: Request, res: Response)
 };
 
 
+
+export const assignSubjectToClass = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { class_id, subject_name, subject_teacher_id, section_ids } = req.body;
+
+    if (!class_id || !subject_name) {
+      return res.status(400).json({ 
+        error: "class_id and subject_name are required" 
+      });
+    }
+
+    const subjectResult = await sql`
+      INSERT INTO subject (class_id, subject_name, subject_teacher_id)
+      VALUES (${class_id}, ${subject_name}, ${subject_teacher_id || null})
+      RETURNING *;
+    `;
+
+    const subject = subjectResult;  if (subject_teacher_id) {
+      await sql`
+        UPDATE teacher_profile 
+        SET assigned_subjects = COALESCE(assigned_subjects, '[]'::jsonb) || ${JSON.stringify([subject_name])}::jsonb,
+            updated_at = NOW()
+        WHERE teacher_id = ${subject_teacher_id};
+      `;
+    }
+
+    return res.status(201).json({
+      message: "Subject assigned to class successfully",
+      data: subject,
+    });
+  } catch (error) {
+    console.error("Error assigning subject to class:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

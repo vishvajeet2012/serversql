@@ -120,3 +120,58 @@ export const deleteTeacherProfile = async (req: Request, res: Response): Promise
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+export const assignTeacherToSubject = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { teacher_id, subject_id } = req.body;
+
+    if (!teacher_id || !subject_id) {
+      return res.status(400).json({ 
+        error: "teacher_id and subject_id are required" 
+      });
+    }
+
+    const subjectResult = await sql`
+      SELECT s.*, c.class_name 
+      FROM subject s
+      JOIN class c ON s.class_id = c.class_id
+      WHERE s.subject_id = ${subject_id};
+    `;
+
+    if (subjectResult.length === 0) {
+      return res.status(404).json({ error: "Subject not found" });
+    }
+
+    const subject = subjectResult[0];
+
+    await sql`
+      UPDATE subject 
+      SET subject_teacher_id = ${teacher_id}, 
+          updated_at = NOW()
+      WHERE subject_id = ${subject_id};
+    `;
+
+    const classAssignment = subject.class_name;
+    
+    await sql`
+      UPDATE teacher_profile 
+      SET assigned_subjects = COALESCE(assigned_subjects, '[]'::jsonb) || ${JSON.stringify([subject.subject_name])}::jsonb,
+          class_assignments = COALESCE(class_assignments, '[]'::jsonb) || ${JSON.stringify([classAssignment])}::jsonb,
+          updated_at = NOW()
+      WHERE teacher_id = ${teacher_id};
+    `;
+
+    return res.status(200).json({
+      message: "Teacher assigned to subject successfully",
+      data: {
+        subject_id: subject_id,
+        teacher_id: teacher_id,
+        subject_name: subject.subject_name,
+        class_name: subject.class_name
+      }
+    });
+  } catch (error) {
+    console.error("Error assigning teacher to subject:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

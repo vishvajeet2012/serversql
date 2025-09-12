@@ -41,9 +41,6 @@ export const getAllStudentProfiles = async (_req: Request, res: Response): Promi
   }
 };
 
-// =========================
-// Get Student Profile by ID
-// =========================
 export const getStudentProfileById = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;

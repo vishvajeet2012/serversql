@@ -23,7 +23,6 @@ export const addStudentProfile = async (req: Request, res: Response): Promise<Re
       return res.status(400).json({ error: "Student ID is required for admin updates" });
     }
 
-    // Allow only Student or Admin roles to add/update profile
     if (role !== "Student" && role !== "Admin") {
       return res.status(403).json({ error: "Only students or admins can add/update a student profile" });
     }
