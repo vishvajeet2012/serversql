@@ -84,8 +84,8 @@ export const getAllTeacherProfiles = async (_req: Request, res: Response): Promi
     
     return res.status(200).json({ 
       data: teachers,
-      count: teachers.length,
-      searchTerm: searchName
+      // count: teachers.length,
+      // searchTerm: searchName
     });
   } catch (error) {
     console.error("Error searching teacher profiles:", error);
