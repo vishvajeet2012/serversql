@@ -5,6 +5,7 @@ import { neon } from "@neondatabase/serverless";
 import bcrypt from "bcryptjs";
 import AuthRoutes from "./routes/AuthRoutes";
 import UserRoutes from "./routes/UserRoutes";
+import TeachRoutes from "./routes/teacherRoutes"
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ const PORT: number = Number(process.env.PORT) || 5000;
 
 app.use("/api/auth", AuthRoutes);
 app.use("/api/user", UserRoutes)
-
+app.use("/api/teacher",TeachRoutes)
 
 
 app.listen(PORT, () => {

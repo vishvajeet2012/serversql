@@ -36,16 +36,22 @@ export const createTeacherProfile = async (req: Request, res: Response): Promise
 export const getAllTeacherProfiles = async (_req: Request, res: Response): Promise<Response> => {
   try {
     const teachers = await sql`
-      SELECT * FROM teacher_profile ORDER BY teacher_id;
+      SELECT 
+        tp.teacher_id,
+        u.name,
+        u.mobile_number,
+        u.email
+      FROM teacher_profile tp
+      INNER JOIN users u ON tp.teacher_id = u.user_id
+      ORDER BY tp.teacher_id;
     `;
-
+    
     return res.status(200).json({ data: teachers });
   } catch (error) {
     console.error("Error fetching teacher profiles:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
-
 // =========================
 // Get Teacher Profile by ID
 // =========================
@@ -151,11 +157,11 @@ export const assignTeacherToSubject = async (req: Request, res: Response): Promi
       WHERE subject_id = ${subject_id};
     `;
 
-    const classAssignment = subject.class_name;
+    const classAssignment = subject?.class_name;
     
     await sql`
       UPDATE teacher_profile 
-      SET assigned_subjects = COALESCE(assigned_subjects, '[]'::jsonb) || ${JSON.stringify([subject.subject_name])}::jsonb,
+      SET assigned_subjects = COALESCE(assigned_subjects, '[]'::jsonb) || ${JSON.stringify([subject?.subject_name])}::jsonb,
           class_assignments = COALESCE(class_assignments, '[]'::jsonb) || ${JSON.stringify([classAssignment])}::jsonb,
           updated_at = NOW()
       WHERE teacher_id = ${teacher_id};
@@ -166,8 +172,8 @@ export const assignTeacherToSubject = async (req: Request, res: Response): Promi
       data: {
         subject_id: subject_id,
         teacher_id: teacher_id,
-        subject_name: subject.subject_name,
-        class_name: subject.class_name
+        subject_name: subject?.subject_name,
+        class_name: subject?.class_name
       }
     });
   } catch (error) {

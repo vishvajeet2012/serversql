@@ -3,6 +3,7 @@ import { authenticateJWT  ,DecodedToken} from "../middleware/auth";
 import {  addStudentProfile } from "../controlers/Profiles";
 import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "../controlers/class"
 import {  createSubject } from "../controlers/subjectControler";
+import { getAllTeacherProfiles } from "../controlers/teacherProfile";
 
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
@@ -17,6 +18,7 @@ userRouter.post("/addStudentProfile",authenticateJWT,addStudentProfile)
 ///////////////classes section  ////////////////
 userRouter.get("/getAllClassbysection",getAllClassbysection)
 userRouter.post("/searchClassBySectionWithQuery",searchClassBySectionWithQuery)
+
 
 
 
