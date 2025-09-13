@@ -16,7 +16,6 @@ export const createStudentProfile = async (req: Request, res: Response): Promise
         (${studentId}, ${rollNumber}, ${classId}, ${sectionId}, ${dob}, ${guardianName}, ${guardianMobileNumber}, ${studentMobileNumber})
       RETURNING *;
     `;
-
     return res.status(201).json({
       message: "Student profile created successfully",
       data: result[0],
