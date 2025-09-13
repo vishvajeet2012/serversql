@@ -624,7 +624,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
     let profileData: any = null;
     let assignmentResults: any = {};
 
-    // Create role-specific profile and handle assignments
     if (role === 'Student' && newUser.user_id) {
       const studentProfileResult = await sql`
         INSERT INTO student_profile (
@@ -656,7 +655,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       
       profileData = studentProfileResult && studentProfileResult.length > 0 ? studentProfileResult[0] : null;
       
-      // Get class and section names if available
       if (classId && sectionId && profileData) {
         const classSection = await sql`
           SELECT c.class_name, s.section_name
@@ -671,7 +669,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
     }
 
     if (role === 'Teacher' && newUser.user_id) {
-      // Create teacher profile with basic info
       const teacherProfileResult = await sql`
         INSERT INTO teacher_profile (
           teacher_id,
@@ -692,7 +689,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       
       profileData = teacherProfileResult && teacherProfileResult.length > 0 ? teacherProfileResult[0] : null;
 
-      // Handle class teacher assignment
       if (isClassTeacher && classTeacherForSection) {
         await sql`
           UPDATE section 
@@ -702,7 +698,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
           WHERE section_id = ${classTeacherForSection}
         `;
 
-        // Add class teacher assignment to results
         const sectionInfo = await sql`
           SELECT s.section_id, s.section_name, s.class_id, c.class_name
           FROM section s
@@ -718,13 +713,11 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
         };
       }
 
-      // Handle subject assignments
       if (subjectAssignments && subjectAssignments.length > 0) {
         assignmentResults.subjectAssignments = [];
         
         for (const subjectAssignment of subjectAssignments) {
           try {
-            // Check if subject already exists for this class
             const existingSubject = await sql`
               SELECT subject_id FROM subject 
               WHERE class_id = ${subjectAssignment.class_id} 
@@ -732,7 +725,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
             `;
 
             if (existingSubject.length > 0) {
-              // Update existing subject with new teacher
               await sql`
                 UPDATE subject 
                 SET 
@@ -747,7 +739,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
               `;
             }
 
-            // Get class name for response
             const classInfo = await sql`
               SELECT class_name FROM class WHERE class_id = ${subjectAssignment.class_id}
             `;
