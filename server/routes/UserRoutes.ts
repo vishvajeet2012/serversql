@@ -1,5 +1,5 @@
 import { getAllUserData, manageStudents ,addUserByAdmin} from "../controlers/ManageUser";
-import { authenticateJWT  ,DecodedToken} from "../middleware/auth";
+import { authenticateJWT  ,DecodedToken} from "../middleware/AdminAuth";
 import {  addStudentProfile } from "../controlers/Profiles";
 import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "../controlers/class"
 import {  createSubject } from "../controlers/subjectControler";

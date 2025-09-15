@@ -786,7 +786,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Check duplicate user by email (unique)
     const existingUser = await prisma.users.findUnique({
       where: { email },
       select: { email: true },
@@ -798,7 +797,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Teacher validations
     if (role === "Teacher") {
       if (classAssignments && classAssignments.length > 0) {
         for (const assignment of classAssignments) {
@@ -813,7 +811,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
             });
           }
 
-          // Validate section belongs to class
           const sectionExists = await prisma.section.findFirst({
             where: {
               section_id: assignment.section_id,
@@ -861,7 +858,6 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       }
     }
 
-    // Student validations
     if (role === "Student") {
       const numericClassId = classId ? Number(classId) : undefined;
       const numericSectionId = sectionId ? Number(sectionId) : undefined;
