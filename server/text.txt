@@ -1,0 +1,5 @@
+DATABASE_URL=postgresql://neondb_owner:npg_DN7nsBzYtw8f@ep-super-recipe-a1bbdbgu-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+TOKEN_EXPIRES_HOURS=168
+JWT_EXPIRES_IN= 7d
+JWT_SECRET=your-super-secret-jwt-key-at-least-32-characters-long
+PORT =5000

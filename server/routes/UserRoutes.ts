@@ -15,7 +15,7 @@ userRouter.post("/manageuser", manageStudents)
 userRouter.post("/addUserByAdmin",authenticateJWT, addUserByAdmin)
 userRouter.post("/addStudentProfile",authenticateJWT,addStudentProfile)
 
-///////////////classes section  /////////////////
+///////////////classes section  prisma done  /////////////////
 userRouter.get("/getAllClassbysection",getAllClassbysection)
 userRouter.post("/searchClassBySectionWithQuery",searchClassBySectionWithQuery)
 

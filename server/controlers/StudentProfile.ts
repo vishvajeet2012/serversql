@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { sql } from "../db/inidex";
+import prisma from './prismaClient';
 
 export const createStudentProfile = async (req: Request, res: Response): Promise<Response> => {
   try {

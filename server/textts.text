@@ -1,0 +1,262 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  Student
+  Teacher
+  Admin
+}
+
+enum UserStatus {
+  Active
+  Inactive
+}
+
+enum MarkStatus {
+  PendingApproval
+}
+
+enum ActionType {
+  CREATE
+  UPLOAD
+}
+
+// Models
+model User {
+  id               Int              @id @default(autoincrement()) @map("user_id")
+  name             String
+  email            String           @unique
+  mobileNumber     String?          @map("mobile_number")
+  profilePicture   String?          @map("profile_picture")
+  passwordHash     String           @map("password_hash")
+  role             Role
+  status           UserStatus
+  createdAt        DateTime         @default(now())               @map("created_at")
+  updatedAt        DateTime         @updatedAt                    @map("updated_at")
+
+  // relations
+  studentProfile   StudentProfile?
+  teacherProfile   TeacherProfile?
+  notifications    Notification[]
+  testsCreated     Test[]           @relation("TestCreatedBy")
+  auditLogs        AuditLog[]
+  approvedMarks    Marks[]          @relation("MarksApprovedBy")
+  classTeacherFor  Section[]        @relation("SectionClassTeacher")
+  sectionTeaching  SectionTeacher[]
+
+  @@map("users")
+}
+
+model Class {
+  id          Int               @id @default(autoincrement()) @map("class_id")
+  className   String            @map("class_name")
+  description String
+  createdAt   DateTime          @default(now())               @map("created_at")
+  updatedAt   DateTime          @updatedAt                    @map("updated_at")
+
+  sections    Section[]
+  subjects    Subject[]
+  students    StudentProfile[]
+  tests       Test[]
+
+  @@map("class")
+}
+
+model Section {
+  id             Int               @id @default(autoincrement()) @map("section_id")
+  classId        Int               @map("class_id")
+  sectionName    String            @map("section_name")
+  classTeacherId Int?              @map("class_teacher_id")
+  createdAt      DateTime          @default(now())               @map("created_at")
+  updatedAt      DateTime          @updatedAt                    @map("updated_at")
+
+  class          Class             @relation(fields: [classId], references: [id])
+  classTeacher   User?             @relation("SectionClassTeacher", fields: [classTeacherId], references: [id])
+  students       StudentProfile[]
+  sectionTeachers SectionTeacher[]
+  tests          Test[]
+
+  @@map("section")
+}
+
+model Subject {
+  id                Int       @id @default(autoincrement()) @map("subject_id")
+  classId           Int       @map("class_id")
+  subjectName       String    @map("subject_name")
+  subjectTeacherId  Int?      @map("subject_teacher_id")
+  createdAt         DateTime  @default(now())               @map("created_at")
+  updatedAt         DateTime  @updatedAt                    @map("updated_at")
+
+  class             Class     @relation(fields: [classId], references: [id])
+  subjectTeacher    User?     @relation("SubjectTeacher", fields: [subjectTeacherId], references: [id])
+  tests             Test[]
+
+  @@map("subject")
+}
+
+model TeacherProfile {
+  teacherId         Int       @id                           @map("teacher_id")
+  assignedSubjects  Json      @map("assigned_subjects")
+  classAssignments  Json      @map("class_assignments")
+  createdAt         DateTime  @default(now())               @map("created_at")
+  updatedAt         DateTime  @updatedAt                    @map("updated_at")
+
+  user              User      @relation(fields: [teacherId], references: [id])
+  sectionTeaching   SectionTeacher[]
+  feedbackGiven     Feedback[] @relation("FeedbackFromTeacher")
+
+  @@map("teacher_profile")
+}
+
+model StudentProfile {
+  studentId              Int        @id                           @map("student_id")
+  rollNumber             String     @map("roll_number")
+  classId                Int        @map("class_id")
+  sectionId              Int        @map("section_id")
+  dob                    DateTime
+  guardianName           String     @map("guardian_name")
+  guardianMobileNumber   String     @map("guardian_mobile_number")
+  studentMobileNumber    String     @map("student_mobile_number")
+  createdAt              DateTime   @default(now())               @map("created_at")
+  updatedAt              DateTime   @updatedAt                    @map("updated_at")
+
+  user                   User       @relation(fields: [studentId], references: [id])
+  class                  Class      @relation(fields: [classId], references: [id])
+  section                Section    @relation(fields: [sectionId], references: [id])
+
+  marks                  Marks[]
+  feedbackReceived       Feedback[] @relation("FeedbackToStudent")
+
+  @@map("student_profile")
+}
+
+model SectionTeacher {
+  id         Int      @id @default(autoincrement())
+  sectionId  Int      @map("section_id")
+  teacherId  Int      @map("teacher_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  section    Section  @relation(fields: [sectionId], references: [id])
+  teacher    User     @relation(fields: [teacherId], references: [id])
+
+  @@map("section_teachers")
+  @@unique([sectionId, teacherId])
+}
+
+model Test {
+  id             Int        @id @default(autoincrement()) @map("test_id")
+  classId        Int        @map("class_id")
+  sectionId      Int        @map("section_id")
+  subjectId      Int        @map("subject_id")
+  testName       String     @map("test_name")
+  dateConducted  DateTime   @map("date_conducted")
+  maxMarks       Int        @map("max_marks")
+  createdBy      Int        @map("created_by")
+  testRank       Int        @map("test_rank")
+  createdAt      DateTime   @default(now())               @map("created_at")
+  updatedAt      DateTime   @updatedAt                    @map("updated_at")
+
+  class          Class      @relation(fields: [classId], references: [id])
+  section        Section    @relation(fields: [sectionId], references: [id])
+  subject        Subject    @relation(fields: [subjectId], references: [id])
+  creator        User       @relation("TestCreatedBy", fields: [createdBy], references: [id])
+  marks          Marks[]
+  feedback       Feedback[]
+
+  @@map("test")
+}
+
+model Marks {
+  id            Int         @id @default(autoincrement()) @map("marks_id")
+  testId        Int         @map("test_id")
+  studentId     Int         @map("student_id")
+  marksObtained Int         @map("marks_obtained")
+  status        MarkStatus
+  approvedBy    Int?        @map("approved_by")
+  approvedAt    DateTime?   @map("approved_at")
+  createdAt     DateTime    @default(now())               @map("created_at")
+  updatedAt     DateTime    @updatedAt                    @map("updated_at")
+
+  test          Test        @relation(fields: [testId], references: [id])
+  student       StudentProfile @relation(fields: [studentId], references: [studentId])
+  approver      User?       @relation("MarksApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("marks")
+  @@unique([testId, studentId])
+}
+
+model Feedback {
+  id         Int       @id @default(autoincrement()) @map("feedback_id")
+  teacherId  Int       @map("teacher_id")
+  studentId  Int       @map("student_id")
+  testId     Int       @map("test_id")
+  message    String
+  createdAt  DateTime  @default(now())               @map("created_at")
+  updatedAt  DateTime  @updatedAt                    @map("updated_at")
+
+  teacher    TeacherProfile    @relation("FeedbackFromTeacher", fields: [teacherId], references: [teacherId])
+  student    StudentProfile    @relation("FeedbackToStudent", fields: [studentId], references: [studentId])
+  test       Test              @relation(fields: [testId], references: [id])
+
+  @@map("feedback")
+}
+
+model Notification {
+  id         Int       @id @default(autoincrement()) @map("notification_id")
+  userId     Int       @map("user_id")
+  title      String
+  message    String
+  isRead     Boolean   @map("is_read")
+  createdAt  DateTime  @default(now())               @map("created_at")
+
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          Int         @id @default(autoincrement()) @map("log_id")
+  userId      Int         @map("user_id")
+  action      ActionType
+  entityType  String      @map("entity_type")
+  entityId    Int         @map("entity_id")
+  timestamp   DateTime
+  remarks     String?
+
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@map("audit_log")
+}

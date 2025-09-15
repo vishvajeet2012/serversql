@@ -2,6 +2,7 @@ import { authenticateJWT  ,DecodedToken} from "../middleware/auth";
 import { sql } from "../db/inidex";
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import prisma from './../db/prisma';
 
 import jwt, { SignOptions } from "jsonwebtoken";
 
@@ -23,88 +24,233 @@ interface User {
   updated_at?: string;
 }
 
-export const manageStudents =async (req:Request,res:Response): Promise<Response> => {
-   
-    try{
-        console.log(req.body)
-            const { status  ,user_id , mobile_number,role, name, email } =  req.body as any
+// export const manageStudents =async (req:Request,res:Response): Promise<Response> => {
+  
+//   try{
+//       console.log(req.body)
+//           const { status  ,user_id , mobile_number,role, name, email } =  req.body as any
 
-            const parsedUserId = Number(user_id?.toString().trim())
+//           const parsedUserId = Number(user_id?.toString().trim())
 
-           if (!parsedUserId) {
+//           if (!parsedUserId) {
+//     return res.status(400).json({
+//       message: "user id required plase try again",
+//       status: false
+//     });}
+    
+//     if (role === 'Admin') {
+// res.status(403).json({
+//   message: "You cannot change role to admin — permission not allowed."
+// });
+// }
+    
+
+//   const checkUser=  await sql`
+//      SELECT user_id, name, email, mobile_number, profile_picture,
+//             role, status, created_at, updated_at
+//      FROM users
+//      WHERE user_id = ${parsedUserId}
+//     ` as User[];
+
+
+
+//     if(checkUser.length ===0 ){
+//         return res.status(404).json({
+//             message:"user not found ",
+//             status: false
+//         }) }
+
+//       const updateFields: Partial<User> = {};
+
+
+
+//     if (name !== undefined) updateFields.name = name;
+//     if (email !== undefined) updateFields.email = email;
+//     if (mobile_number !== undefined) updateFields.mobile_number = mobile_number;
+//     if (role !== undefined) updateFields.role = role;
+//     if (status !== undefined) updateFields.status = status;
+
+
+//     const now = new Date();
+
+
+//     const updateUser= await sql`
+//     UPDATE users 
+//     SET
+//         name = CASE WHEN ${name !== undefined} THEN ${name} ELSE name END,
+//         email = CASE WHEN ${email !== undefined} THEN ${email} ELSE email END,
+//         mobile_number = CASE WHEN ${mobile_number !== undefined} THEN ${mobile_number} ELSE mobile_number END,
+//         role = CASE WHEN ${role !== undefined} THEN ${role} ELSE role END,
+//         status = CASE WHEN ${status !== undefined} THEN ${status} ELSE status END,
+//         updated_at = ${now}
+//       WHERE user_id = ${parsedUserId}
+//       RETURNING user_id, name, email, mobile_number, profile_picture,
+//                 role, status, created_at, updated_at
+//     ` as User[];
+//     if(updateUser){
+//     return res.status(200).json({message:"update successfully ",status:true, data:updateUser[0]})
+//     }else{
+//             return res.status(400).json({message:"error while updateding data  ",status:false,})
+
+
+
+//     }
+//                     }catch(error){
+//                         return res.status(500).json({message:"internal  server error"  ,status:false, 
+//                             error:error
+//                         })
+//                     }
+
+
+
+
+// }
+
+export const manageStudents = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    console.log(req.body);
+
+    // Extract possible update fields from the body
+    const { status, user_id, mobile_number, role, name, email } = req.body as any;
+
+    // Parse and validate user_id
+    const parsedUserId = Number(user_id?.toString().trim());
+    if (!parsedUserId) {
       return res.status(400).json({
         message: "user id required plase try again",
-        status: false
-      });}
-      
-      if (role === 'Admin') {
-  res.status(403).json({
-    message: "You cannot change role to admin — permission not allowed."
-  });
-}
-      
-
-    const checkUser=  await sql`
-     SELECT user_id, name, email, mobile_number, profile_picture,
-            role, status, created_at, updated_at
-     FROM users
-     WHERE user_id = ${parsedUserId}
-    ` as User[];
-
-
-
-    if(checkUser.length ===0 ){
-        return res.status(404).json({
-            message:"user not found ",
-            status: false
-        }) }
-
-      const updateFields: Partial<User> = {};
-
-
-
-    if (name !== undefined) updateFields.name = name;
-    if (email !== undefined) updateFields.email = email;
-    if (mobile_number !== undefined) updateFields.mobile_number = mobile_number;
-    if (role !== undefined) updateFields.role = role;
-    if (status !== undefined) updateFields.status = status;
-
-
-    const now = new Date();
-
-
-    const updateUser= await sql`
-    UPDATE users 
-    SET
-        name = CASE WHEN ${name !== undefined} THEN ${name} ELSE name END,
-        email = CASE WHEN ${email !== undefined} THEN ${email} ELSE email END,
-        mobile_number = CASE WHEN ${mobile_number !== undefined} THEN ${mobile_number} ELSE mobile_number END,
-        role = CASE WHEN ${role !== undefined} THEN ${role} ELSE role END,
-        status = CASE WHEN ${status !== undefined} THEN ${status} ELSE status END,
-        updated_at = ${now}
-      WHERE user_id = ${parsedUserId}
-      RETURNING user_id, name, email, mobile_number, profile_picture,
-                role, status, created_at, updated_at
-    ` as User[];
-    if(updateUser){
-    return res.status(200).json({message:"update successfully ",status:true, data:updateUser[0]})
-    }else{
-            return res.status(400).json({message:"error while updateding data  ",status:false,})
-
-
-
+        status: false,
+      });
     }
-                    }catch(error){
-                        return res.status(500).json({message:"internal  server error"  ,status:false, 
-                            error:error
-                        })
-                    }
+
+    // Prevent promoting anyone to Admin via this endpoint
+    if (role === "Admin") {
+      return res.status(403).json({
+        message: "You cannot change role to admin — permission not allowed.",
+      });
+    }
+
+    // Ensure the user exists
+    const existing = await prisma.users.findUnique({
+      where: { user_id: parsedUserId },
+      select: { user_id: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "user not found ",
+        status: false,
+      });
+    }
+
+    // Build the update payload conditionally (skip fields that are undefined)
+    const now = new Date();
+    const data: any = { updated_at: now };
+
+    if (name !== undefined) data.name = name;            // only set if provided
+    if (email !== undefined) data.email = email;         // only set if provided
+    if (mobile_number !== undefined) data.mobile_number = mobile_number; // only set if provided
+    if (role !== undefined) data.role = role;            // only set if provided
+    if (status !== undefined) data.status = status;      // only set if provided
+
+    // Perform the update and return selected fields
+    const updated = await prisma.users.update({
+      where: { user_id: parsedUserId },
+      data,
+      select: {
+        user_id: true,
+        name: true,
+        email: true,
+        mobile_number: true,
+        profile_picture: true,
+        role: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+
+    return res
+      .status(200)
+      .json({ message: "update successfully ", status: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({
+      message: "internal  server error",
+      status: false,
+      error,
+    });
+  }
+};
 
 
+// export const manageStudents = async (req: Request, res: Response): Promise<Response> => {
+//   try {
+//     console.log(req.body);
 
+//     const { status, user_id, mobile_number, role, name, email } = req.body as any;
 
-}
+//     const parsedUserId = Number(user_id?.toString().trim());
 
+//     if (!parsedUserId) {
+//       return res.status(400).json({
+//         message: "user id required plase try again",
+//         status: false,
+//       });
+//     }
+
+//     if (role === "Admin") {
+//       return res.status(403).json({
+//         message: "You cannot change role to admin — permission not allowed.",
+//       });
+//     }
+
+//     const existing = await prisma.users.findUnique({
+//       where: { user_id: parsedUserId },
+//       select: { user_id: true },
+//     });
+
+//     if (!existing) {
+//       return res.status(404).json({
+//         message: "user not found ",
+//         status: false,
+//       });
+//     }
+
+//     const now = new Date();
+
+//     const updated = await prisma.users.update({
+//       where: { user_id: parsedUserId },
+//       data: {
+//         name: name ?? Prisma.skip,
+//         email: email ?? Prisma.skip,
+//         mobile_number: mobile_number ?? Prisma.skip,
+//         role: role ?? Prisma.skip,
+//         status: status ?? Prisma.skip,
+//         updated_at: now,
+//       },
+//       select: {
+//         user_id: true,
+//         name: true,
+//         email: true,
+//         mobile_number: true,
+//         profile_picture: true,
+//         role: true,
+//         status: true,
+//         created_at: true,
+//         updated_at: true,
+//       },
+//     });
+
+//     return res
+//       .status(200)
+//       .json({ message: "update successfully ", status: true, data: updated });
+//   } catch (error) {
+//     return res.status(500).json({
+//       message: "internal  server error",
+//       status: false,
+//       error,
+//     });
+//   }
+// };
 
 
 export const getAllUserData = async (req: Request, res: Response): Promise<Response> => {

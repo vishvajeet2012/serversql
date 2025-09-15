@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model audit_log {
+  log_id      Int       @id @default(autoincrement())
+  user_id     Int
+  action      String    @db.VarChar(100)
+  entity_type String    @db.VarChar(50)
+  entity_id   Int
+  timestamp   DateTime? @default(now()) @db.Timestamp(6)
+  remarks     String?
+  users       users     @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model has been renamed to 'Renamedclass' during introspection, because the original name 'class' is reserved.
+model Renamedclass {
+  class_id        Int               @id @default(autoincrement())
+  class_name      String            @db.VarChar(100)
+  description     String?
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamp(6)
+  section         section[]
+  student_profile student_profile[]
+  subject         subject[]
+  test            test[]
+
+  @@map("class")
+}
+
+model feedback {
+  feedback_id     Int             @id @default(autoincrement())
+  teacher_id      Int
+  student_id      Int
+  test_id         Int
+  message         String
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?       @default(now()) @db.Timestamp(6)
+  student_profile student_profile @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profile teacher_profile @relation(fields: [teacher_id], references: [teacher_id], onDelete: Cascade, onUpdate: NoAction)
+  test            test            @relation(fields: [test_id], references: [test_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model marks {
+  marks_id        Int             @id @default(autoincrement())
+  test_id         Int
+  student_id      Int
+  marks_obtained  Int
+  status          String?         @default("PendingApproval") @db.VarChar(20)
+  approved_by     Int?
+  approved_at     DateTime?       @db.Timestamp(6)
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?       @default(now()) @db.Timestamp(6)
+  users           users?          @relation(fields: [approved_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  student_profile student_profile @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction)
+  test            test            @relation(fields: [test_id], references: [test_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model notifications {
+  notification_id Int       @id @default(autoincrement())
+  user_id         Int
+  title           String    @db.VarChar(150)
+  message         String
+  is_read         Boolean?  @default(false)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  users           users     @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model section {
+  section_id       Int                @id @default(autoincrement())
+  class_id         Int
+  section_name     String             @db.VarChar(50)
+  class_teacher_id Int?               @unique
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamp(6)
+  Renamedclass     Renamedclass       @relation(fields: [class_id], references: [class_id], onDelete: Cascade, onUpdate: NoAction)
+  section_teachers section_teachers[]
+  student_profile  student_profile[]
+  test             test[]
+}
+
+model section_teachers {
+  id              Int             @id @default(autoincrement())
+  section_id      Int
+  teacher_id      Int
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  section         section         @relation(fields: [section_id], references: [section_id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profile teacher_profile @relation(fields: [teacher_id], references: [teacher_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([section_id, teacher_id])
+}
+
+model student_profile {
+  student_id             Int          @id
+  roll_number            String       @db.VarChar(20)
+  class_id               Int
+  section_id             Int
+  dob                    DateTime?    @db.Date
+  guardian_name          String?      @db.VarChar(100)
+  guardian_mobile_number String?      @db.VarChar(15)
+  student_mobile_number  String?      @db.VarChar(15)
+  created_at             DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?    @default(now()) @db.Timestamp(6)
+  feedback               feedback[]
+  marks                  marks[]
+  Renamedclass           Renamedclass @relation(fields: [class_id], references: [class_id], onDelete: Cascade, onUpdate: NoAction)
+  section                section      @relation(fields: [section_id], references: [section_id], onDelete: Cascade, onUpdate: NoAction)
+  users                  users        @relation(fields: [student_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model subject {
+  subject_id         Int          @id @default(autoincrement())
+  class_id           Int
+  subject_name       String       @db.VarChar(100)
+  subject_teacher_id Int?
+  created_at         DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?    @default(now()) @db.Timestamp(6)
+  Renamedclass       Renamedclass @relation(fields: [class_id], references: [class_id], onDelete: Cascade, onUpdate: NoAction)
+  test               test[]
+}
+
+model teacher_profile {
+  teacher_id        Int                @id
+  assigned_subjects Json?
+  class_assignments Json?
+  created_at        DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?          @default(now()) @db.Timestamp(6)
+  feedback          feedback[]
+  section_teachers  section_teachers[]
+  users             users              @relation(fields: [teacher_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  test              test[]
+}
+
+model test {
+  test_id         Int             @id @default(autoincrement())
+  class_id        Int
+  section_id      Int
+  subject_id      Int
+  test_name       String          @db.VarChar(150)
+  date_conducted  DateTime        @db.Date
+  max_marks       Int
+  created_by      Int
+  test_rank       Int?
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?       @default(now()) @db.Timestamp(6)
+  feedback        feedback[]
+  marks           marks[]
+  Renamedclass    Renamedclass    @relation(fields: [class_id], references: [class_id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profile teacher_profile @relation(fields: [created_by], references: [teacher_id], onDelete: SetNull, onUpdate: NoAction)
+  section         section         @relation(fields: [section_id], references: [section_id], onDelete: Cascade, onUpdate: NoAction)
+  subject         subject         @relation(fields: [subject_id], references: [subject_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  user_id         Int              @id @default(autoincrement())
+  name            String           @db.VarChar(255)
+  email           String           @unique @db.VarChar(255)
+  mobile_number   String?          @db.VarChar(20)
+  profile_picture String?
+  password_hash   String           @db.VarChar(255)
+  role            String           @default("Student") @db.VarChar(20)
+  status          String           @default("Active") @db.VarChar(20)
+  created_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  audit_log       audit_log[]
+  marks           marks[]
+  notifications   notifications[]
+  student_profile student_profile?
+  teacher_profile teacher_profile?
+
+  @@index([email], map: "idx_users_email")
+  @@index([mobile_number], map: "idx_users_mobile")
+  @@index([role], map: "idx_users_role")
+  @@index([status], map: "idx_users_status")
+}
