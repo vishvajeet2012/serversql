@@ -1,4 +1,4 @@
-import { getAllUserData, manageStudents ,addUserByAdmin} from "../controlers/ManageUser";
+import { getAllUserData, manageStudents ,addUserByAdmin, manageStudentss} from "../controlers/ManageUser";
 import { authenticateJWT  ,DecodedToken} from "../middleware/AdminAuth";
 import {  addStudentProfile } from "../controlers/Profiles";
 import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "../controlers/class"
@@ -11,7 +11,7 @@ const userRouter = express.Router();
 
 /////// manage user ///////////////////////
 userRouter.post("/getrolebaseuser", getAllUserData )
-userRouter.post("/manageuser", manageStudents)
+userRouter.post("/manageuser", manageStudentss)
 userRouter.post("/addUserByAdmin", addUserByAdmin)
 userRouter.post("/addStudentProfile",addStudentProfile)
 

@@ -24,6 +24,239 @@ interface User {
   updated_at?: string;
 }
 
+
+type StudentClassAssign = { class_id: number; section_id: number };
+type ClassTeacherAssign = { section_id: number; teacher_id?: number };
+type SubjectTeacherAssign = { subject_id: number; teacher_id?: number };
+
+export const manageStudentss = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const {
+      user_id,
+      // user fields
+      name,
+      email,
+      mobile_number,
+      role,
+      status,
+      // student fields
+      roll_number,
+      class_id,
+      section_id,
+      dob,
+      guardian_name,
+      guardian_mobile_number,
+      student_mobile_number,
+      // teacher fields
+      assigned_subjects,
+      class_assignments,
+      // assign fields
+      studentClass,   // { class_id, section_id }
+      classTeacher,   // { section_id, teacher_id? }
+      subjectTeacher, // { subject_id, teacher_id? }
+      // remarks
+      remarks,
+    } = req.body as any;
+
+    const parsedUserId = Number(user_id?.toString().trim());
+    if (!parsedUserId) {
+      return res.status(400).json({ message: 'user id required please try again', status: false });
+    }
+
+    // Optional: require authenticated admin actor id from middleware
+    const actorId = (req as any)?.auth?.user_id ?? (req as any)?.user?.user_id ?? 0;
+
+    // prevent setting role to Admin via this endpoint
+    if (role === 'Admin') {
+      return res.status(403).json({
+        message: 'You cannot change role to admin — permission not allowed.',
+        status: false,
+      });
+    }
+
+    const existing = await prisma.users.findUnique({
+      where: { user_id: parsedUserId },
+      select: { user_id: true, role: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'user not found', status: false });
+    }
+
+    const now = new Date();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const auditLogs: Array<{
+        user_id: number;
+        action: string;
+        entity_type: string;
+        entity_id: number;
+        remarks?: string;
+      }> = [];
+
+      // 1) Update users table (only provided fields)
+      const userData: any = { updated_at: now };
+      if (name !== undefined) userData.name = name;
+      if (email !== undefined) userData.email = email;
+      if (mobile_number !== undefined) userData.mobile_number = mobile_number;
+      if (role !== undefined) userData.role = role;
+      if (status !== undefined) userData.status = status;
+
+      const updatedUser = await tx.users.update({
+        where: { user_id: parsedUserId },
+        data: userData,
+        select: { user_id: true, role: true },
+      });
+
+      if (Object.keys(userData).length > 1) {
+        auditLogs.push({
+          user_id: actorId,
+          action: 'UPDATE_USER',
+          entity_type: 'users',
+          entity_id: parsedUserId,
+          remarks,
+        });
+      }
+
+      // 2) Upsert student profile (if any student fields present)
+      const hasStudentFields =
+        roll_number !== undefined ||
+        class_id !== undefined ||
+        section_id !== undefined ||
+        dob !== undefined ||
+        guardian_name !== undefined ||
+        guardian_mobile_number !== undefined ||
+        student_mobile_number !== undefined ||
+        studentClass !== undefined;
+
+      if (hasStudentFields) {
+        const sc: StudentClassAssign | undefined = studentClass;
+        const newClassId = sc?.class_id ?? class_id;
+        const newSectionId = sc?.section_id ?? section_id;
+
+        const studentData: any = {};
+        if (roll_number !== undefined) studentData.roll_number = roll_number;
+        if (newClassId !== undefined) studentData.class_id = Number(newClassId);
+        if (newSectionId !== undefined) studentData.section_id = Number(newSectionId);
+        if (dob !== undefined) studentData.dob = dob ? new Date(dob) : null;
+        if (guardian_name !== undefined) studentData.guardian_name = guardian_name;
+        if (guardian_mobile_number !== undefined) studentData.guardian_mobile_number = guardian_mobile_number;
+        if (student_mobile_number !== undefined) studentData.student_mobile_number = student_mobile_number;
+
+        await tx.student_profile.upsert({
+          where: { student_id: parsedUserId },
+          create: { student_id: parsedUserId, roll_number: roll_number ?? '', class_id: Number(newClassId), section_id: Number(newSectionId), ...studentData },
+          update: studentData,
+        });
+
+        auditLogs.push({
+          user_id: actorId,
+          action: 'UPSERT_STUDENT_PROFILE',
+          entity_type: 'student_profile',
+          entity_id: parsedUserId,
+          remarks,
+        });
+      }
+
+      // 3) Upsert teacher profile (if any teacher fields present or assignment present)
+      const hasTeacherFields =
+        assigned_subjects !== undefined ||
+        class_assignments !== undefined ||
+        classTeacher !== undefined ||
+        subjectTeacher !== undefined;
+
+      if (hasTeacherFields) {
+        const teacherData: any = {};
+        if (assigned_subjects !== undefined) teacherData.assigned_subjects = assigned_subjects;
+        if (class_assignments !== undefined) teacherData.class_assignments = class_assignments;
+
+        await tx.teacher_profile.upsert({
+          where: { teacher_id: parsedUserId },
+          create: { teacher_id: parsedUserId, ...teacherData },
+          update: teacherData,
+        });
+
+        auditLogs.push({
+          user_id: actorId,
+          action: 'UPSERT_TEACHER_PROFILE',
+          entity_type: 'teacher_profile',
+          entity_id: parsedUserId,
+          remarks,
+        });
+      }
+
+      // 4) Assign class teacher to a section (optional)
+      if (classTeacher?.section_id) {
+        const ct: ClassTeacherAssign = classTeacher;
+        const assignTeacherId = Number(ct.teacher_id ?? parsedUserId);
+
+        await tx.section.update({
+          where: { section_id: Number(ct.section_id) },
+          data: { class_teacher_id: assignTeacherId },
+        });
+
+        auditLogs.push({
+          user_id: actorId,
+          action: 'ASSIGN_CLASS_TEACHER',
+          entity_type: 'section',
+          entity_id: Number(ct.section_id),
+          remarks,
+        });
+      }
+
+      // 5) Assign subject teacher (optional)
+      if (subjectTeacher?.subject_id) {
+        const st: SubjectTeacherAssign = subjectTeacher;
+        const assignTeacherId = Number(st.teacher_id ?? parsedUserId);
+
+        await tx.subject.update({
+          where: { subject_id: Number(st.subject_id) },
+          data: { subject_teacher_id: assignTeacherId },
+        });
+
+        auditLogs.push({
+          user_id: actorId,
+          action: 'ASSIGN_SUBJECT_TEACHER',
+          entity_type: 'subject',
+          entity_id: Number(st.subject_id),
+          remarks,
+        });
+      }
+
+      // 6) Persist audit logs
+      if (auditLogs.length > 0) {
+        await tx.audit_log.createMany({
+          data: auditLogs.map((l) => ({ ...l, timestamp: now })),
+        });
+      }
+
+      // 7) Return consolidated view
+      const final = await tx.users.findUnique({
+        where: { user_id: parsedUserId },
+        include: {
+          student_profile: true,
+          teacher_profile: true,
+        },
+      });
+
+      return final;
+    });
+
+    return res.status(200).json({
+      message: 'update successfully',
+      status: true,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: 'internal server error',
+      status: false,
+      error,
+    });
+  }
+};
+/////////////////////
+
 // export const manageStudents =async (req:Request,res:Response): Promise<Response> => {
   
 //   try{
@@ -110,7 +343,7 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
   try {
     console.log(req.body);
 
-    const { status, user_id, mobile_number, role, name, email } = req.body as any;
+    const { status, user_id, mobile_number, role, name, email , assigned , class_assignments  } = req.body as any;
 
     const parsedUserId = Number(user_id?.toString().trim());
     if (!parsedUserId) {
@@ -120,14 +353,12 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Prevent promoting anyone to Admin via this endpoint
     if (role === "Admin") {
       return res.status(403).json({
         message: "You cannot change role to admin — permission not allowed.",
       });
     }
 
-    // Ensure the user exists
     const existing = await prisma.users.findUnique({
       where: { user_id: parsedUserId },
       select: { user_id: true },
@@ -140,15 +371,14 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
       });
     }
 
-    // Build the update payload conditionally (skip fields that are undefined)
     const now = new Date();
     const data: any = { updated_at: now };
 
-    if (name !== undefined) data.name = name;            // only set if provided
-    if (email !== undefined) data.email = email;         // only set if provided
+    if (name !== undefined) data.name = name;            
+    if (email !== undefined) data.email = email;         
     if (mobile_number !== undefined) data.mobile_number = mobile_number; // only set if provided
     if (role !== undefined) data.role = role;            // only set if provided
-    if (status !== undefined) data.status = status;      // only set if provided
+    if (status !== undefined) data.status = status;    
 
     const updated = await prisma.users.update({
       where: { user_id: parsedUserId },
@@ -179,554 +409,145 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
 };
 
 
-// export const manageStudents = async (req: Request, res: Response): Promise<Response> => {
-//   try {
-//     console.log(req.body);
 
-//     const { status, user_id, mobile_number, role, name, email } = req.body as any;
 
-//     const parsedUserId = Number(user_id?.toString().trim());
 
-//     if (!parsedUserId) {
-//       return res.status(400).json({
-//         message: "user id required plase try again",
-//         status: false,
-//       });
-//     }
 
-//     if (role === "Admin") {
-//       return res.status(403).json({
-//         message: "You cannot change role to admin — permission not allowed.",
-//       });
-//     }
-
-//     const existing = await prisma.users.findUnique({
-//       where: { user_id: parsedUserId },
-//       select: { user_id: true },
-//     });
-
-//     if (!existing) {
-//       return res.status(404).json({
-//         message: "user not found ",
-//         status: false,
-//       });
-//     }
-
-//     const now = new Date();
-
-//     const updated = await prisma.users.update({
-//       where: { user_id: parsedUserId },
-//       data: {
-//         name: name ?? Prisma.skip,
-//         email: email ?? Prisma.skip,
-//         mobile_number: mobile_number ?? Prisma.skip,
-//         role: role ?? Prisma.skip,
-//         status: status ?? Prisma.skip,
-//         updated_at: now,
-//       },
-//       select: {
-//         user_id: true,
-//         name: true,
-//         email: true,
-//         mobile_number: true,
-//         profile_picture: true,
-//         role: true,
-//         status: true,
-//         created_at: true,
-//         updated_at: true,
-//       },
-//     });
-
-//     return res
-//       .status(200)
-//       .json({ message: "update successfully ", status: true, data: updated });
-//   } catch (error) {
-//     return res.status(500).json({
-//       message: "internal  server error",
-//       status: false,
-//       error,
-//     });
-//   }
-// };
 
 
 export const getAllUserData = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { role } = req.body;
-    
+    const { role } = req.body as { role?: 'Admin' | 'Teacher' | 'Student' };
+
     if (!role) {
-      return res.status(400).json({ 
-        message: "Role is required", 
-        status: false 
+      return res.status(400).json({
+        message: 'Role is required',
+        status: false,
       });
     }
 
-    const validRoles = ['Admin', 'Teacher', 'Student'];
+    const validRoles: Array<'Admin' | 'Teacher' | 'Student'> = ['Admin', 'Teacher', 'Student'];
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ 
-        message: "Invalid role. Role must be Admin, Teacher, or Student", 
-        status: false
+      return res.status(400).json({
+        message: 'Invalid role. Role must be Admin, Teacher, or Student',
+        status: false,
       });
-    }  
+    }
 
-    const users = await sql`
-      SELECT user_id, name, email, mobile_number, profile_picture,
-             role, status, created_at, updated_at
-      FROM users
-      WHERE role = ${role}
-      ORDER BY created_at DESC
-    `;
+    const baseOptions: any = {
+      where: { role },
+      orderBy: { created_at: 'desc' as const },
+    };
+
+    if (role === 'Student') {
+      baseOptions.include = {
+        student_profile: {
+          select: {
+            student_id: true,
+            roll_number: true,
+            class_id: true,
+            section_id: true,
+            dob: true,
+            guardian_name: true,
+            guardian_mobile_number: true,
+            student_mobile_number: true,
+            created_at: true,
+            updated_at: true,
+            Renamedclass: {
+              select: { class_name: true },
+            },
+            section: {
+              select: { section_name: true },
+            },
+          },
+        },
+      };
+    } else if (role === 'Teacher') {
+      baseOptions.include = {
+        teacher_profile: {
+          select: {
+            teacher_id: true,
+            assigned_subjects: true,
+            class_assignments: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
+      };
+    }
+
+    const users = await prisma.users.findMany(baseOptions);
 
     if (!users || users.length === 0) {
-      return res.status(404).json({ 
-        message: `No ${role}s found`, 
-        status: false 
+      return res.status(404).json({
+        message: `No ${role}s found`,
+        status: false,
       });
     }
 
-    const usersWithProfiles = await Promise.all(
-      users.map(async (user: any) => {
-        let profileData: any = null;
+    const usersWithProfiles = users.map((u: any) => {
+      let profile: any = null;
 
-        if (user.role === "Student") {
-          const studentProfile = await sql`
-            SELECT sp.student_id, sp.roll_number, sp.class_id, sp.section_id, sp.dob,
-                   sp.guardian_name, sp.guardian_mobile_number, sp.student_mobile_number,
-                   sp.created_at, sp.updated_at,
-                   c.class_name,
-                   s.section_name
-            FROM student_profile sp
-            JOIN class c ON sp.class_id = c.class_id
-            JOIN section s ON sp.section_id = s.section_id
-            WHERE sp.student_id = ${user.user_id}
-          `;
-          profileData = studentProfile[0] || null;
+      if (role === 'Student') {
+        const sp = u.student_profile;
+        if (sp) {
+          profile = {
+            student_id: sp.student_id,
+            roll_number: sp.roll_number,
+            class_id: sp.class_id,
+            section_id: sp.section_id,
+            dob: sp.dob,
+            guardian_name: sp.guardian_name,
+            guardian_mobile_number: sp.guardian_mobile_number,
+            student_mobile_number: sp.student_mobile_number,
+            created_at: sp.created_at,
+            updated_at: sp.updated_at,
+            class_name: sp.Renamedclass?.class_name ?? null,
+            section_name: sp.section?.section_name ?? null,
+          };
         }
+      } else if (role === 'Teacher') {
+        const tp = u.teacher_profile;
+        profile = tp
+          ? {
+              teacher_id: tp.teacher_id,
+              assigned_subjects: tp.assigned_subjects,
+              class_assignments: tp.class_assignments,
+              created_at: tp.created_at,
+              updated_at: tp.updated_at,
+            }
+          : null;
+      } else {
+        profile = null; // Admin
+      }
 
-        if (user.role === "Teacher") {
-          const teacherProfile = await sql`
-            SELECT tp.teacher_id, tp.assigned_subjects, tp.class_assignments,
-                   tp.created_at, tp.updated_at
-            FROM teacher_profile tp
-            WHERE tp.teacher_id = ${user.user_id}
-          `;
-          profileData = teacherProfile[0] || null;
-        }
+      // Strip raw relation objects from result
+      const {
+        student_profile: _student_profile,
+        teacher_profile: _teacher_profile,
+        ...userBase
+      } = u;
 
-        if (user.role === "Admin") {
-          profileData = null;
-        }
-
-        return {
-          ...user,
-          profile: profileData
-        };
-      })
-    );
+      return {
+        ...userBase,
+        profile,
+      };
+    });
 
     return res.status(200).json({
       message: `${role} users data successfully fetched`,
       status: true,
       users: usersWithProfiles,
-      count: usersWithProfiles.length
+      count: usersWithProfiles.length,
     });
-
   } catch (error) {
-    console.log(error, "get all user api not working");
+    console.log(error, 'get all user api not working');
     return res.status(500).json({
-      message: "Internal server error",
+      message: 'Internal server error',
       status: false,
     });
   }
 };
-
-// export const addUserByAdmin = async (req: Request, res: Response): Promise<Response> => {
-//   try {
-//     const {
-//       email,
-//       name,
-//       role,
-//       mobileNumber,
-//       profilePicture,
-//       // Student fields
-//       guardianName,
-//       guardianMobileNumber,
-//       studentMobileNumber,
-//       dob,
-//       classId,
-//       sectionId,
-//       rollNumber,
-//       // Teacher fields
-//       assignedSubjects,
-//       classAssignments, // Array of {class_id, section_id}
-//       subjectAssignments, // Array of {class_id, subject_name}
-//       isClassTeacher,
-//       classTeacherForSection // If isClassTeacher is true, this section_id
-//     } = req.body as {
-//       email: string;
-//       name: string;
-//       role: 'Admin' | 'Teacher' | 'Student';
-//       mobileNumber?: string;
-//       profilePicture?: string;
-//       // Student specific
-//       guardianName?: string;
-//       guardianMobileNumber?: string;
-//       studentMobileNumber?: string;
-//       dob?: string;
-//       classId?: string;
-//       sectionId?: string;
-//       rollNumber?: number;
-//       // Teacher specific
-//       assignedSubjects?: string[];
-//       classAssignments?: {class_id: number, section_id: number}[];
-//       subjectAssignments?: {class_id: number, subject_name: string}[];
-//       isClassTeacher?: boolean;
-//       classTeacherForSection?: number;
-//     };
-
-//     if (!email || !name || !role) {
-//       return res.status(400).json({ 
-//         error: "Email, name, and role are required fields" 
-//       });
-//     }
-
-//     if (!['Admin', 'Teacher', 'Student'].includes(role)) {
-//       return res.status(400).json({ 
-//         error: "Role must be Admin, Teacher, or Student" 
-//       });
-//     }
-
-//     const existingUser = await sql`
-//       SELECT email FROM users WHERE email = ${email}
-//     `;
-
-//     if (existingUser.length > 0) {
-//       return res.status(409).json({ 
-//         error: "User with this email already exists" 
-//       });
-//     }
-
-//     if (role === 'Teacher') {
-//       if (classAssignments && classAssignments.length > 0) {
-//         for (const assignment of classAssignments) {
-//           const classExists = await sql`
-//             SELECT class_id FROM class WHERE class_id = ${assignment.class_id}
-//           `;
-//           if (classExists.length === 0) {
-//             return res.status(400).json({ 
-//               error: `Invalid class ID: ${assignment.class_id}` 
-//             });
-//           }
-
-//           const sectionExists = await sql`
-//             SELECT section_id FROM section WHERE section_id = ${assignment.section_id} AND class_id = ${assignment.class_id}
-//           `;
-//           if (sectionExists.length === 0) {
-//             return res.status(400).json({ 
-//               error: `Invalid section ID: ${assignment.section_id} for class: ${assignment.class_id}` 
-//             });
-//           }
-//         }
-//       }
-
-//       if (isClassTeacher && classTeacherForSection) {
-//         const sectionExists = await sql`
-//           SELECT section_id, class_teacher_id FROM section WHERE section_id = ${classTeacherForSection}
-//         `;
-//         if (sectionExists.length === 0) {
-//           return res.status(400).json({ 
-//             error: `Invalid section ID for class teacher assignment: ${classTeacherForSection}` 
-//           });
-//         }
-        
-//         if (sectionExists[0]?.class_teacher_id) {
-//           return res.status(409).json({ 
-//             error: `Section ${classTeacherForSection} already has a class teacher assigned` 
-//           });
-//         }
-//       }
-
-//       if (subjectAssignments && subjectAssignments.length > 0) {
-//         for (const subjectAssignment of subjectAssignments) {
-//           const classExists = await sql`
-//             SELECT class_id FROM class WHERE class_id = ${subjectAssignment.class_id}
-//           `;
-//           if (classExists.length === 0) {
-//             return res.status(400).json({ 
-//               error: `Invalid class ID for subject assignment: ${subjectAssignment.class_id}` 
-//             });
-//           }
-//         }
-//       }
-//     }
-
-//     if (role === 'Student') {
-//       if (classId) {
-//         const classExists = await sql`
-//           SELECT class_id FROM class WHERE class_id = ${classId}
-//         `;
-//         if (classExists.length === 0) {
-//           return res.status(400).json({ 
-//             error: "Invalid class ID provided" 
-//           });
-//         }
-//       }
-
-//       if (sectionId) {
-//         const sectionExists = await sql`
-//           SELECT section_id FROM section WHERE section_id = ${sectionId}
-//         `;
-//         if (sectionExists.length === 0) {
-//           return res.status(400).json({ 
-//             error: "Invalid section ID provided" 
-//           });
-//         }
-//       }
-
-//       if (rollNumber && sectionId) {
-//         const rollExists = await sql`
-//           SELECT student_id FROM student_profile 
-//           WHERE section_id = ${sectionId} AND roll_number = ${rollNumber}
-//         `;
-//         if (rollExists.length > 0) {
-//           return res.status(409).json({ 
-//             error: "Roll number already exists in this section" 
-//           });
-//         }
-//       }
-//     }
-
-//     const defaultPassword = "1234567890";
-//     const passwordHash = await bcrypt.hash(defaultPassword, 10);
-
-//     const userResult = await sql`
-//       INSERT INTO users (
-//         name, 
-//         email, 
-//         mobile_number, 
-//         profile_picture, 
-//         password_hash, 
-//         role, 
-//         status, 
-//         created_at, 
-//         updated_at
-//       ) 
-//       VALUES (
-//         ${name}, 
-//         ${email}, 
-//         ${mobileNumber || null}, 
-//         ${profilePicture || null}, 
-//         ${passwordHash}, 
-//         ${role}, 
-//         'Active', 
-//         NOW(), 
-//         NOW()
-//       ) 
-//       RETURNING user_id, name, email, mobile_number, profile_picture, role, status, created_at, updated_at
-//     `;
-
-//     if (!userResult || userResult.length === 0) {
-//       return res.status(500).json({ 
-//         error: "Failed to create user in database" 
-//       });
-//     }
-
-//     const newUser = userResult[0];
-    
-//     if (!newUser) {
-//       return res.status(500).json({ 
-//         error: "User creation returned empty result" 
-//       });
-//     }
-
-//     let profileData: any = null;
-//     let assignmentResults: any = {};
-
-//     if (role === 'Student' && newUser.user_id) {
-//       const studentProfileResult = await sql`
-//         INSERT INTO student_profile (
-//           student_id,
-//           roll_number,
-//           class_id,
-//           section_id,
-//           dob,
-//           guardian_name,
-//           guardian_mobile_number,
-//           student_mobile_number,
-//           created_at,
-//           updated_at
-//         )
-//         VALUES (
-//           ${newUser.user_id},
-//           ${rollNumber || null},
-//           ${classId || null},
-//           ${sectionId || null},
-//           ${dob || null},
-//           ${guardianName || null},
-//           ${guardianMobileNumber || null},
-//           ${studentMobileNumber || null},
-//           NOW(),
-//           NOW()
-//         )
-//         RETURNING *
-//       `;
-      
-//       profileData = studentProfileResult && studentProfileResult.length > 0 ? studentProfileResult[0] : null;
-      
-//       if (classId && sectionId && profileData) {
-//         const classSection = await sql`
-//           SELECT c.class_name, s.section_name
-//           FROM class c, section s
-//           WHERE c.class_id = ${classId} AND s.section_id = ${sectionId}
-//         `;
-//         if (classSection && classSection.length > 0) {
-//           profileData.class_name = classSection[0]?.class_name;
-//           profileData.section_name = classSection[0]?.section_name;
-//         }
-//       }
-//     }
-
-//     if (role === 'Teacher' && newUser.user_id) {
-//       const teacherProfileResult = await sql`
-//         INSERT INTO teacher_profile (
-//           teacher_id,
-//           assigned_subjects,
-//           class_assignments,
-//           created_at,
-//           updated_at
-//         )
-//         VALUES (
-//           ${newUser.user_id},
-//           ${JSON.stringify(assignedSubjects || [])}::jsonb,
-//           ${JSON.stringify(classAssignments || [])}::jsonb,
-//           NOW(),
-//           NOW()
-//         )
-//         RETURNING *
-//       `;
-      
-//       profileData = teacherProfileResult && teacherProfileResult.length > 0 ? teacherProfileResult[0] : null;
-
-//       if (isClassTeacher && classTeacherForSection) {
-//         await sql`
-//           UPDATE section 
-//           SET 
-//             class_teacher_id = ${newUser.user_id},
-//             updated_at = NOW()
-//           WHERE section_id = ${classTeacherForSection}
-//         `;
-
-//         const sectionInfo = await sql`
-//           SELECT s.section_id, s.section_name, s.class_id, c.class_name
-//           FROM section s
-//           JOIN class c ON s.class_id = c.class_id
-//           WHERE s.section_id = ${classTeacherForSection}
-//         `;
-
-//         assignmentResults.classTeacherAssignment = {
-//           section_id: classTeacherForSection,
-//           section_name: sectionInfo[0]?.section_name,
-//           class_id: sectionInfo[0]?.class_id,
-//           class_name: sectionInfo[0]?.class_name
-//         };
-//       }
-
-//       if (subjectAssignments && subjectAssignments.length > 0) {
-//         assignmentResults.subjectAssignments = [];
-        
-//         for (const subjectAssignment of subjectAssignments) {
-//           try {
-//             const existingSubject = await sql`
-//               SELECT subject_id FROM subject 
-//               WHERE class_id = ${subjectAssignment.class_id} 
-//               AND subject_name = ${subjectAssignment.subject_name}
-//             `;
-
-//             if (existingSubject.length > 0) {
-//               await sql`
-//                 UPDATE subject 
-//                 SET 
-//                   subject_teacher_id = ${newUser.user_id},
-//                   updated_at = NOW()
-//                 WHERE subject_id = ${existingSubject[0]?.subject_id}
-//               `;
-//             } else {
-//               await sql`
-//                 INSERT INTO subject (class_id, subject_name, subject_teacher_id, created_at, updated_at)
-//                 VALUES (${subjectAssignment.class_id}, ${subjectAssignment.subject_name}, ${newUser.user_id}, NOW(), NOW())
-//               `;
-//             }
-
-//             const classInfo = await sql`
-//               SELECT class_name FROM class WHERE class_id = ${subjectAssignment.class_id}
-//             `;
-
-//             assignmentResults.subjectAssignments.push({
-//               class_id: subjectAssignment.class_id,
-//               class_name: classInfo[0]?.class_name,
-//               subject_name: subjectAssignment.subject_name,
-//               status: existingSubject.length > 0 ? 'updated' : 'created'
-//             });
-//           } catch (error) {
-//             console.error(`Error assigning subject ${subjectAssignment.subject_name}:`, error);
-//           }
-//         }
-//       }
-
-//       if (classAssignments && classAssignments.length > 0) {
-//         assignmentResults.classAssignments = [];
-        
-//         for (const assignment of classAssignments) {
-//           const classSection = await sql`
-//             SELECT c.class_name, s.section_name
-//             FROM class c
-//             JOIN section s ON c.class_id = s.class_id
-//             WHERE c.class_id = ${assignment.class_id} AND s.section_id = ${assignment.section_id}
-//           `;
-
-//           if (classSection.length > 0) {
-//             assignmentResults.classAssignments.push({
-//               class_id: assignment?.class_id,
-//               section_id: assignment?.section_id,
-//               class_name: classSection[0]?.class_name,
-//               section_name: classSection[0]?.section_name
-//             });
-//           }
-//         }
-//       }
-//     }
-
-//     const response: any = {
-//       message: "User created successfully by admin",
-//       defaultPassword: defaultPassword,
-//       user: {
-//         id: newUser.user_id,
-//         name: newUser.name,
-//         email: newUser.email,
-//         mobileNumber: newUser.mobile_number,
-//         profilePicture: newUser.profile_picture,
-//         role: newUser.role,
-//         status: newUser.status,
-//         createdAt: newUser.created_at,
-//         updatedAt: newUser.updated_at
-//       },
-//       profile: profileData
-//     };
-
-//     if (role === 'Teacher' && Object.keys(assignmentResults).length > 0) {
-//       response.assignments = assignmentResults;
-//     }
-
-//     return res.status(201).json(response);
-
-//   } catch (error) {
-//     console.error("Add user by admin error:", error);
-//     return res.status(500).json({ 
-//       error: "Failed to create user" 
-//     });
-//   }
-// };
-
 
 
 
