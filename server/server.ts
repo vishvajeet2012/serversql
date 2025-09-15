@@ -10,12 +10,7 @@ import TeachRoutes from "./routes/teacherRoutes"
 dotenv.config();
 
 const app = express();
-app.use(cors({
-  origin: ["http://localhost:8081", "http://localhost:3000"], // your frontend URLs
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true, // if you send cookies/auth headers
-}));
+app.use(cors())
 app.use(express.json({
   verify: (req, res, buf, encoding) => {
     try {
