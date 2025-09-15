@@ -110,10 +110,8 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
   try {
     console.log(req.body);
 
-    // Extract possible update fields from the body
     const { status, user_id, mobile_number, role, name, email } = req.body as any;
 
-    // Parse and validate user_id
     const parsedUserId = Number(user_id?.toString().trim());
     if (!parsedUserId) {
       return res.status(400).json({
@@ -152,7 +150,6 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
     if (role !== undefined) data.role = role;            // only set if provided
     if (status !== undefined) data.status = status;      // only set if provided
 
-    // Perform the update and return selected fields
     const updated = await prisma.users.update({
       where: { user_id: parsedUserId },
       data,
@@ -351,19 +348,27 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //       role,
 //       mobileNumber,
 //       profilePicture,
+//       // Student fields
 //       guardianName,
 //       guardianMobileNumber,
 //       studentMobileNumber,
 //       dob,
 //       classId,
 //       sectionId,
-//       rollNumber
+//       rollNumber,
+//       // Teacher fields
+//       assignedSubjects,
+//       classAssignments, // Array of {class_id, section_id}
+//       subjectAssignments, // Array of {class_id, subject_name}
+//       isClassTeacher,
+//       classTeacherForSection // If isClassTeacher is true, this section_id
 //     } = req.body as {
 //       email: string;
 //       name: string;
 //       role: 'Admin' | 'Teacher' | 'Student';
 //       mobileNumber?: string;
 //       profilePicture?: string;
+//       // Student specific
 //       guardianName?: string;
 //       guardianMobileNumber?: string;
 //       studentMobileNumber?: string;
@@ -371,9 +376,14 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //       classId?: string;
 //       sectionId?: string;
 //       rollNumber?: number;
+//       // Teacher specific
+//       assignedSubjects?: string[];
+//       classAssignments?: {class_id: number, section_id: number}[];
+//       subjectAssignments?: {class_id: number, subject_name: string}[];
+//       isClassTeacher?: boolean;
+//       classTeacherForSection?: number;
 //     };
 
- 
 //     if (!email || !name || !role) {
 //       return res.status(400).json({ 
 //         error: "Email, name, and role are required fields" 
@@ -394,6 +404,96 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //       return res.status(409).json({ 
 //         error: "User with this email already exists" 
 //       });
+//     }
+
+//     if (role === 'Teacher') {
+//       if (classAssignments && classAssignments.length > 0) {
+//         for (const assignment of classAssignments) {
+//           const classExists = await sql`
+//             SELECT class_id FROM class WHERE class_id = ${assignment.class_id}
+//           `;
+//           if (classExists.length === 0) {
+//             return res.status(400).json({ 
+//               error: `Invalid class ID: ${assignment.class_id}` 
+//             });
+//           }
+
+//           const sectionExists = await sql`
+//             SELECT section_id FROM section WHERE section_id = ${assignment.section_id} AND class_id = ${assignment.class_id}
+//           `;
+//           if (sectionExists.length === 0) {
+//             return res.status(400).json({ 
+//               error: `Invalid section ID: ${assignment.section_id} for class: ${assignment.class_id}` 
+//             });
+//           }
+//         }
+//       }
+
+//       if (isClassTeacher && classTeacherForSection) {
+//         const sectionExists = await sql`
+//           SELECT section_id, class_teacher_id FROM section WHERE section_id = ${classTeacherForSection}
+//         `;
+//         if (sectionExists.length === 0) {
+//           return res.status(400).json({ 
+//             error: `Invalid section ID for class teacher assignment: ${classTeacherForSection}` 
+//           });
+//         }
+        
+//         if (sectionExists[0]?.class_teacher_id) {
+//           return res.status(409).json({ 
+//             error: `Section ${classTeacherForSection} already has a class teacher assigned` 
+//           });
+//         }
+//       }
+
+//       if (subjectAssignments && subjectAssignments.length > 0) {
+//         for (const subjectAssignment of subjectAssignments) {
+//           const classExists = await sql`
+//             SELECT class_id FROM class WHERE class_id = ${subjectAssignment.class_id}
+//           `;
+//           if (classExists.length === 0) {
+//             return res.status(400).json({ 
+//               error: `Invalid class ID for subject assignment: ${subjectAssignment.class_id}` 
+//             });
+//           }
+//         }
+//       }
+//     }
+
+//     if (role === 'Student') {
+//       if (classId) {
+//         const classExists = await sql`
+//           SELECT class_id FROM class WHERE class_id = ${classId}
+//         `;
+//         if (classExists.length === 0) {
+//           return res.status(400).json({ 
+//             error: "Invalid class ID provided" 
+//           });
+//         }
+//       }
+
+//       if (sectionId) {
+//         const sectionExists = await sql`
+//           SELECT section_id FROM section WHERE section_id = ${sectionId}
+//         `;
+//         if (sectionExists.length === 0) {
+//           return res.status(400).json({ 
+//             error: "Invalid section ID provided" 
+//           });
+//         }
+//       }
+
+//       if (rollNumber && sectionId) {
+//         const rollExists = await sql`
+//           SELECT student_id FROM student_profile 
+//           WHERE section_id = ${sectionId} AND roll_number = ${rollNumber}
+//         `;
+//         if (rollExists.length > 0) {
+//           return res.status(409).json({ 
+//             error: "Roll number already exists in this section" 
+//           });
+//         }
+//       }
 //     }
 
 //     const defaultPassword = "1234567890";
@@ -440,32 +540,9 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //     }
 
 //     let profileData: any = null;
+//     let assignmentResults: any = {};
 
-//     // Create role-specific profile
 //     if (role === 'Student' && newUser.user_id) {
-//       // Validate class and section if provided
-//       if (classId) {
-//         const classExists = await sql`
-//           SELECT class_id FROM class WHERE class_id = ${classId}
-//         `;
-//         if (classExists.length === 0) {
-//           return res.status(400).json({ 
-//             error: "Invalid class ID provided" 
-//           });
-//         }
-//       }
-
-//       if (sectionId) {
-//         const sectionExists = await sql`
-//           SELECT section_id FROM section WHERE section_id = ${sectionId}
-//         `;
-//         if (sectionExists.length === 0) {
-//           return res.status(400).json({ 
-//             error: "Invalid section ID provided" 
-//           });
-//         }
-//       }
-
 //       const studentProfileResult = await sql`
 //         INSERT INTO student_profile (
 //           student_id,
@@ -496,7 +573,6 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
       
 //       profileData = studentProfileResult && studentProfileResult.length > 0 ? studentProfileResult[0] : null;
       
-//       // Get class and section names if available
 //       if (classId && sectionId && profileData) {
 //         const classSection = await sql`
 //           SELECT c.class_name, s.section_name
@@ -521,8 +597,8 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //         )
 //         VALUES (
 //           ${newUser.user_id},
-//           '[]'::jsonb,
-//           '[]'::jsonb,
+//           ${JSON.stringify(assignedSubjects || [])}::jsonb,
+//           ${JSON.stringify(classAssignments || [])}::jsonb,
 //           NOW(),
 //           NOW()
 //         )
@@ -530,9 +606,97 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //       `;
       
 //       profileData = teacherProfileResult && teacherProfileResult.length > 0 ? teacherProfileResult[0] : null;
+
+//       if (isClassTeacher && classTeacherForSection) {
+//         await sql`
+//           UPDATE section 
+//           SET 
+//             class_teacher_id = ${newUser.user_id},
+//             updated_at = NOW()
+//           WHERE section_id = ${classTeacherForSection}
+//         `;
+
+//         const sectionInfo = await sql`
+//           SELECT s.section_id, s.section_name, s.class_id, c.class_name
+//           FROM section s
+//           JOIN class c ON s.class_id = c.class_id
+//           WHERE s.section_id = ${classTeacherForSection}
+//         `;
+
+//         assignmentResults.classTeacherAssignment = {
+//           section_id: classTeacherForSection,
+//           section_name: sectionInfo[0]?.section_name,
+//           class_id: sectionInfo[0]?.class_id,
+//           class_name: sectionInfo[0]?.class_name
+//         };
+//       }
+
+//       if (subjectAssignments && subjectAssignments.length > 0) {
+//         assignmentResults.subjectAssignments = [];
+        
+//         for (const subjectAssignment of subjectAssignments) {
+//           try {
+//             const existingSubject = await sql`
+//               SELECT subject_id FROM subject 
+//               WHERE class_id = ${subjectAssignment.class_id} 
+//               AND subject_name = ${subjectAssignment.subject_name}
+//             `;
+
+//             if (existingSubject.length > 0) {
+//               await sql`
+//                 UPDATE subject 
+//                 SET 
+//                   subject_teacher_id = ${newUser.user_id},
+//                   updated_at = NOW()
+//                 WHERE subject_id = ${existingSubject[0]?.subject_id}
+//               `;
+//             } else {
+//               await sql`
+//                 INSERT INTO subject (class_id, subject_name, subject_teacher_id, created_at, updated_at)
+//                 VALUES (${subjectAssignment.class_id}, ${subjectAssignment.subject_name}, ${newUser.user_id}, NOW(), NOW())
+//               `;
+//             }
+
+//             const classInfo = await sql`
+//               SELECT class_name FROM class WHERE class_id = ${subjectAssignment.class_id}
+//             `;
+
+//             assignmentResults.subjectAssignments.push({
+//               class_id: subjectAssignment.class_id,
+//               class_name: classInfo[0]?.class_name,
+//               subject_name: subjectAssignment.subject_name,
+//               status: existingSubject.length > 0 ? 'updated' : 'created'
+//             });
+//           } catch (error) {
+//             console.error(`Error assigning subject ${subjectAssignment.subject_name}:`, error);
+//           }
+//         }
+//       }
+
+//       if (classAssignments && classAssignments.length > 0) {
+//         assignmentResults.classAssignments = [];
+        
+//         for (const assignment of classAssignments) {
+//           const classSection = await sql`
+//             SELECT c.class_name, s.section_name
+//             FROM class c
+//             JOIN section s ON c.class_id = s.class_id
+//             WHERE c.class_id = ${assignment.class_id} AND s.section_id = ${assignment.section_id}
+//           `;
+
+//           if (classSection.length > 0) {
+//             assignmentResults.classAssignments.push({
+//               class_id: assignment?.class_id,
+//               section_id: assignment?.section_id,
+//               class_name: classSection[0]?.class_name,
+//               section_name: classSection[0]?.section_name
+//             });
+//           }
+//         }
+//       }
 //     }
 
-//     return res.status(201).json({
+//     const response: any = {
 //       message: "User created successfully by admin",
 //       defaultPassword: defaultPassword,
 //       user: {
@@ -547,7 +711,13 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //         updatedAt: newUser.updated_at
 //       },
 //       profile: profileData
-//     });
+//     };
+
+//     if (role === 'Teacher' && Object.keys(assignmentResults).length > 0) {
+//       response.assignments = assignmentResults;
+//     }
+
+//     return res.status(201).json(response);
 
 //   } catch (error) {
 //     console.error("Add user by admin error:", error);
@@ -556,6 +726,8 @@ export const getAllUserData = async (req: Request, res: Response): Promise<Respo
 //     });
 //   }
 // };
+
+
 
 
 export const addUserByAdmin = async (req: Request, res: Response): Promise<Response> => {
@@ -583,7 +755,7 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
     } = req.body as {
       email: string;
       name: string;
-      role: 'Admin' | 'Teacher' | 'Student';
+      role: "Admin" | "Teacher" | "Student";
       mobileNumber?: string;
       profilePicture?: string;
       // Student specific
@@ -596,128 +768,146 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
       rollNumber?: number;
       // Teacher specific
       assignedSubjects?: string[];
-      classAssignments?: {class_id: number, section_id: number}[];
-      subjectAssignments?: {class_id: number, subject_name: string}[];
+      classAssignments?: { class_id: number; section_id: number }[];
+      subjectAssignments?: { class_id: number; subject_name: string }[];
       isClassTeacher?: boolean;
       classTeacherForSection?: number;
     };
 
-    // Basic validation
     if (!email || !name || !role) {
-      return res.status(400).json({ 
-        error: "Email, name, and role are required fields" 
+      return res.status(400).json({
+        error: "Email, name, and role are required fields",
       });
     }
 
-    if (!['Admin', 'Teacher', 'Student'].includes(role)) {
-      return res.status(400).json({ 
-        error: "Role must be Admin, Teacher, or Student" 
+    if (!["Admin", "Teacher", "Student"].includes(role)) {
+      return res.status(400).json({
+        error: "Role must be Admin, Teacher, or Student",
       });
     }
 
-    // Check if user already exists
-    const existingUser = await sql`
-      SELECT email FROM users WHERE email = ${email}
-    `;
+    // Check duplicate user by email (unique)
+    const existingUser = await prisma.users.findUnique({
+      where: { email },
+      select: { email: true },
+    });
 
-    if (existingUser.length > 0) {
-      return res.status(409).json({ 
-        error: "User with this email already exists" 
+    if (existingUser) {
+      return res.status(409).json({
+        error: "User with this email already exists",
       });
     }
 
-    // Additional validation for teachers
-    if (role === 'Teacher') {
-      // Validate class assignments if provided
+    // Teacher validations
+    if (role === "Teacher") {
       if (classAssignments && classAssignments.length > 0) {
         for (const assignment of classAssignments) {
-          const classExists = await sql`
-            SELECT class_id FROM class WHERE class_id = ${assignment.class_id}
-          `;
-          if (classExists.length === 0) {
-            return res.status(400).json({ 
-              error: `Invalid class ID: ${assignment.class_id}` 
+          // Validate class
+          const classExists = await prisma.renamedclass.findUnique({
+            where: { class_id: assignment.class_id },
+            select: { class_id: true },
+          });
+          if (!classExists) {
+            return res.status(400).json({
+              error: `Invalid class ID: ${assignment.class_id}`,
             });
           }
 
-          const sectionExists = await sql`
-            SELECT section_id FROM section WHERE section_id = ${assignment.section_id} AND class_id = ${assignment.class_id}
-          `;
-          if (sectionExists.length === 0) {
-            return res.status(400).json({ 
-              error: `Invalid section ID: ${assignment.section_id} for class: ${assignment.class_id}` 
+          // Validate section belongs to class
+          const sectionExists = await prisma.section.findFirst({
+            where: {
+              section_id: assignment.section_id,
+              class_id: assignment.class_id,
+            },
+            select: { section_id: true },
+          });
+          if (!sectionExists) {
+            return res.status(400).json({
+              error: `Invalid section ID: ${assignment.section_id} for class: ${assignment.class_id}`,
             });
           }
         }
       }
 
-      // Validate class teacher assignment
       if (isClassTeacher && classTeacherForSection) {
-        const sectionExists = await sql`
-          SELECT section_id, class_teacher_id FROM section WHERE section_id = ${classTeacherForSection}
-        `;
-        if (sectionExists.length === 0) {
-          return res.status(400).json({ 
-            error: `Invalid section ID for class teacher assignment: ${classTeacherForSection}` 
+        const sectionExists = await prisma.section.findUnique({
+          where: { section_id: classTeacherForSection },
+          select: { section_id: true, class_teacher_id: true },
+        });
+        if (!sectionExists) {
+          return res.status(400).json({
+            error: `Invalid section ID for class teacher assignment: ${classTeacherForSection}`,
           });
         }
-        
-        // Check if section already has a class teacher
-        if (sectionExists[0]?.class_teacher_id) {
-          return res.status(409).json({ 
-            error: `Section ${classTeacherForSection} already has a class teacher assigned` 
+        if (sectionExists.class_teacher_id) {
+          return res.status(409).json({
+            error: `Section ${classTeacherForSection} already has a class teacher assigned`,
           });
         }
       }
 
-      // Validate subject assignments
       if (subjectAssignments && subjectAssignments.length > 0) {
         for (const subjectAssignment of subjectAssignments) {
-          const classExists = await sql`
-            SELECT class_id FROM class WHERE class_id = ${subjectAssignment.class_id}
-          `;
-          if (classExists.length === 0) {
-            return res.status(400).json({ 
-              error: `Invalid class ID for subject assignment: ${subjectAssignment.class_id}` 
+          const classExists = await prisma.renamedclass.findUnique({
+            where: { class_id: subjectAssignment.class_id },
+            select: { class_id: true },
+          });
+          if (!classExists) {
+            return res.status(400).json({
+              error: `Invalid class ID for subject assignment: ${subjectAssignment.class_id}`,
             });
           }
         }
       }
     }
 
-    // Additional validation for students
-    if (role === 'Student') {
-      if (classId) {
-        const classExists = await sql`
-          SELECT class_id FROM class WHERE class_id = ${classId}
-        `;
-        if (classExists.length === 0) {
-          return res.status(400).json({ 
-            error: "Invalid class ID provided" 
+    // Student validations
+    if (role === "Student") {
+      const numericClassId = classId ? Number(classId) : undefined;
+      const numericSectionId = sectionId ? Number(sectionId) : undefined;
+
+      if (numericClassId) {
+        const classExists = await prisma.renamedclass.findUnique({
+          where: { class_id: numericClassId },
+          select: { class_id: true },
+        });
+        if (!classExists) {
+          return res.status(400).json({
+            error: "Invalid class ID provided",
           });
         }
       }
 
-      if (sectionId) {
-        const sectionExists = await sql`
-          SELECT section_id FROM section WHERE section_id = ${sectionId}
-        `;
-        if (sectionExists.length === 0) {
-          return res.status(400).json({ 
-            error: "Invalid section ID provided" 
+      if (numericSectionId) {
+        const sectionExists = await prisma.section.findUnique({
+          where: { section_id: numericSectionId },
+          select: { section_id: true },
+        });
+        if (!sectionExists) {
+          return res.status(400).json({
+            error: "Invalid section ID provided",
           });
         }
       }
 
-      // Check if roll number is unique in the section
-      if (rollNumber && sectionId) {
-        const rollExists = await sql`
-          SELECT student_id FROM student_profile 
-          WHERE section_id = ${sectionId} AND roll_number = ${rollNumber}
-        `;
-        if (rollExists.length > 0) {
-          return res.status(409).json({ 
-            error: "Roll number already exists in this section" 
+      // Prisma schema requires roll_number as non-nullable String -> enforce presence
+      if (!rollNumber) {
+        return res.status(400).json({
+          error: "rollNumber is required for Student",
+        });
+      }
+
+      if (rollNumber && numericSectionId) {
+        const rollExists = await prisma.student_profile.findFirst({
+          where: {
+            section_id: numericSectionId,
+            roll_number: String(rollNumber),
+          },
+          select: { student_id: true },
+        });
+        if (rollExists) {
+          return res.status(409).json({
+            error: "Roll number already exists in this section",
           });
         }
       }
@@ -727,205 +917,185 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
     const defaultPassword = "1234567890";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    const userResult = await sql`
-      INSERT INTO users (
-        name, 
-        email, 
-        mobile_number, 
-        profile_picture, 
-        password_hash, 
-        role, 
-        status, 
-        created_at, 
-        updated_at
-      ) 
-      VALUES (
-        ${name}, 
-        ${email}, 
-        ${mobileNumber || null}, 
-        ${profilePicture || null}, 
-        ${passwordHash}, 
-        ${role}, 
-        'Active', 
-        NOW(), 
-        NOW()
-      ) 
-      RETURNING user_id, name, email, mobile_number, profile_picture, role, status, created_at, updated_at
-    `;
+    const newUser = await prisma.users.create({
+      data: {
+        name,
+        email,
+        mobile_number: mobileNumber ?? null,
+        profile_picture: profilePicture ?? null,
+        password_hash: passwordHash,
+        role,
+        status: "Active",
+      },
+      select: {
+        user_id: true,
+        name: true,
+        email: true,
+        mobile_number: true,
+        profile_picture: true,
+        role: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
 
-    if (!userResult || userResult.length === 0) {
-      return res.status(500).json({ 
-        error: "Failed to create user in database" 
-      });
-    }
-
-    const newUser = userResult[0];
-    
     if (!newUser) {
-      return res.status(500).json({ 
-        error: "User creation returned empty result" 
-      });
+      return res.status(500).json({ error: "Failed to create user in database" });
     }
 
     let profileData: any = null;
-    let assignmentResults: any = {};
+    const assignmentResults: any = {};
 
-    if (role === 'Student' && newUser.user_id) {
-      const studentProfileResult = await sql`
-        INSERT INTO student_profile (
-          student_id,
-          roll_number,
-          class_id,
-          section_id,
-          dob,
-          guardian_name,
-          guardian_mobile_number,
-          student_mobile_number,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${newUser.user_id},
-          ${rollNumber || null},
-          ${classId || null},
-          ${sectionId || null},
-          ${dob || null},
-          ${guardianName || null},
-          ${guardianMobileNumber || null},
-          ${studentMobileNumber || null},
-          NOW(),
-          NOW()
-        )
-        RETURNING *
-      `;
-      
-      profileData = studentProfileResult && studentProfileResult.length > 0 ? studentProfileResult[0] : null;
-      
-      if (classId && sectionId && profileData) {
-        const classSection = await sql`
-          SELECT c.class_name, s.section_name
-          FROM class c, section s
-          WHERE c.class_id = ${classId} AND s.section_id = ${sectionId}
-        `;
-        if (classSection && classSection.length > 0) {
-          profileData.class_name = classSection[0]?.class_name;
-          profileData.section_name = classSection[0]?.section_name;
-        }
+    // Student profile
+    if (role === "Student" && newUser.user_id) {
+      const numericClassId = classId ? Number(classId) : undefined;
+      const numericSectionId = sectionId ? Number(sectionId) : undefined;
+
+      const studentProfile = await prisma.student_profile.create({
+        data: {
+          student_id: newUser.user_id,
+          roll_number: String(rollNumber!), // enforced above
+          class_id: numericClassId ?? 0, // required Int in schema
+          section_id: numericSectionId ?? 0, // required Int in schema
+          dob: dob ? new Date(dob) : undefined,
+          guardian_name: guardianName ?? null,
+          guardian_mobile_number: guardianMobileNumber ?? null,
+          student_mobile_number: studentMobileNumber ?? null,
+        },
+      });
+
+      profileData = studentProfile;
+
+      if (numericClassId && numericSectionId) {
+        const [cls, sec] = await Promise.all([
+          prisma.renamedclass.findUnique({
+            where: { class_id: numericClassId },
+            select: { class_name: true },
+          }),
+          prisma.section.findUnique({
+            where: { section_id: numericSectionId },
+            select: { section_name: true },
+          }),
+        ]);
+        profileData = {
+          ...profileData,
+          class_name: cls?.class_name,
+          section_name: sec?.section_name,
+        };
       }
     }
 
-    if (role === 'Teacher' && newUser.user_id) {
-      const teacherProfileResult = await sql`
-        INSERT INTO teacher_profile (
-          teacher_id,
-          assigned_subjects,
-          class_assignments,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${newUser.user_id},
-          ${JSON.stringify(assignedSubjects || [])}::jsonb,
-          ${JSON.stringify(classAssignments || [])}::jsonb,
-          NOW(),
-          NOW()
-        )
-        RETURNING *
-      `;
-      
-      profileData = teacherProfileResult && teacherProfileResult.length > 0 ? teacherProfileResult[0] : null;
+    if (role === "Teacher" && newUser.user_id) {
+      const teacherProfile = await prisma.teacher_profile.create({
+        data: {
+          teacher_id: newUser.user_id,
+          assigned_subjects: assignedSubjects ?? [],
+          class_assignments: classAssignments ?? [],
+        },
+      });
+
+      profileData = teacherProfile;
 
       if (isClassTeacher && classTeacherForSection) {
-        await sql`
-          UPDATE section 
-          SET 
-            class_teacher_id = ${newUser.user_id},
-            updated_at = NOW()
-          WHERE section_id = ${classTeacherForSection}
-        `;
+        await prisma.section.update({
+          where: { section_id: classTeacherForSection },
+          data: {
+            class_teacher_id: newUser.user_id,
+          },
+        });
 
-        const sectionInfo = await sql`
-          SELECT s.section_id, s.section_name, s.class_id, c.class_name
-          FROM section s
-          JOIN class c ON s.class_id = c.class_id
-          WHERE s.section_id = ${classTeacherForSection}
-        `;
+        const sectionInfo = await prisma.section.findUnique({
+          where: { section_id: classTeacherForSection },
+          select: {
+            section_id: true,
+            section_name: true,
+            class_id: true,
+            Renamedclass: { select: { class_name: true } },
+          },
+        });
 
         assignmentResults.classTeacherAssignment = {
-          section_id: classTeacherForSection,
-          section_name: sectionInfo[0]?.section_name,
-          class_id: sectionInfo[0]?.class_id,
-          class_name: sectionInfo[0]?.class_name
+          section_id: sectionInfo?.section_id,
+          section_name: sectionInfo?.section_name,
+          class_id: sectionInfo?.class_id,
+          class_name: sectionInfo?.Renamedclass.class_name,
         };
       }
 
       if (subjectAssignments && subjectAssignments.length > 0) {
         assignmentResults.subjectAssignments = [];
-        
         for (const subjectAssignment of subjectAssignments) {
           try {
-            const existingSubject = await sql`
-              SELECT subject_id FROM subject 
-              WHERE class_id = ${subjectAssignment.class_id} 
-              AND subject_name = ${subjectAssignment.subject_name}
-            `;
+            const existingSubject = await prisma.subject.findFirst({
+              where: {
+                class_id: subjectAssignment.class_id,
+                subject_name: subjectAssignment.subject_name,
+              },
+              select: { subject_id: true },
+            });
 
-            if (existingSubject.length > 0) {
-              await sql`
-                UPDATE subject 
-                SET 
-                  subject_teacher_id = ${newUser.user_id},
-                  updated_at = NOW()
-                WHERE subject_id = ${existingSubject[0]?.subject_id}
-              `;
+            if (existingSubject) {
+              await prisma.subject.update({
+                where: { subject_id: existingSubject.subject_id },
+                data: {
+                  subject_teacher_id: newUser.user_id,
+                },
+              });
             } else {
-              await sql`
-                INSERT INTO subject (class_id, subject_name, subject_teacher_id, created_at, updated_at)
-                VALUES (${subjectAssignment.class_id}, ${subjectAssignment.subject_name}, ${newUser.user_id}, NOW(), NOW())
-              `;
+              await prisma.subject.create({
+                data: {
+                  class_id: subjectAssignment.class_id,
+                  subject_name: subjectAssignment.subject_name,
+                  subject_teacher_id: newUser.user_id,
+                },
+              });
             }
 
-            const classInfo = await sql`
-              SELECT class_name FROM class WHERE class_id = ${subjectAssignment.class_id}
-            `;
+            const cls = await prisma.renamedclass.findUnique({
+              where: { class_id: subjectAssignment.class_id },
+              select: { class_name: true },
+            });
 
             assignmentResults.subjectAssignments.push({
               class_id: subjectAssignment.class_id,
-              class_name: classInfo[0]?.class_name,
+              class_name: cls?.class_name,
               subject_name: subjectAssignment.subject_name,
-              status: existingSubject.length > 0 ? 'updated' : 'created'
+              status: existingSubject ? "updated" : "created",
             });
-          } catch (error) {
-            console.error(`Error assigning subject ${subjectAssignment.subject_name}:`, error);
+          } catch (err) {
+            console.error(`Error assigning subject ${subjectAssignment.subject_name}:`, err);
           }
         }
       }
 
-      // Add class assignment details to results
       if (classAssignments && classAssignments.length > 0) {
         assignmentResults.classAssignments = [];
-        
         for (const assignment of classAssignments) {
-          const classSection = await sql`
-            SELECT c.class_name, s.section_name
-            FROM class c
-            JOIN section s ON c.class_id = s.class_id
-            WHERE c.class_id = ${assignment.class_id} AND s.section_id = ${assignment.section_id}
-          `;
+          const classSection = await prisma.section.findFirst({
+            where: {
+              section_id: assignment.section_id,
+              class_id: assignment.class_id,
+            },
+            select: {
+              section_id: true,
+              section_name: true,
+              Renamedclass: { select: { class_id: true, class_name: true } },
+            },
+          });
 
-          if (classSection.length > 0) {
+          if (classSection) {
             assignmentResults.classAssignments.push({
-              class_id: assignment?.class_id,
-              section_id: assignment?.section_id,
-              class_name: classSection[0]?.class_name,
-              section_name: classSection[0]?.section_name
+              class_id: classSection.Renamedclass.class_id,
+              section_id: classSection.section_id,
+              class_name: classSection.Renamedclass.class_name,
+              section_name: classSection.section_name,
             });
           }
         }
       }
     }
 
-    // Prepare response
     const response: any = {
       message: "User created successfully by admin",
       defaultPassword: defaultPassword,
@@ -938,27 +1108,25 @@ export const addUserByAdmin = async (req: Request, res: Response): Promise<Respo
         role: newUser.role,
         status: newUser.status,
         createdAt: newUser.created_at,
-        updatedAt: newUser.updated_at
+        updatedAt: newUser.updated_at,
       },
-      profile: profileData
+      profile: profileData,
     };
 
-    // Add assignment results for teachers
-    if (role === 'Teacher' && Object.keys(assignmentResults).length > 0) {
+    if (role === "Teacher" && Object.keys(assignmentResults).length > 0) {
       response.assignments = assignmentResults;
     }
 
     return res.status(201).json(response);
-
   } catch (error) {
     console.error("Add user by admin error:", error);
-    return res.status(500).json({ 
-      error: "Failed to create user" 
+    return res.status(500).json({
+      error: "Failed to create user",
     });
   }
 };
 
-// Additional helper function to update user assignments (for existing users)
+
 export const updateUserAssignments = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId } = req.params;
