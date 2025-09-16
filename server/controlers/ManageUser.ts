@@ -254,14 +254,12 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
     const now = new Date();
     const userData: any = { updated_at: now };
 
-    // Update basic user fields
     if (name !== undefined) userData.name = name;            
     if (email !== undefined) userData.email = email;         
     if (mobile_number !== undefined) userData.mobile_number = mobile_number;
     if (role !== undefined) userData.role = role;            
     if (status !== undefined) userData.status = status;    
 
-    // Handle class and section lookup if provided
     let classId: number | undefined;
     let sectionId: number | undefined;
 
@@ -279,8 +277,7 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
       }
       classId = foundClass.class_id;
 
-      // Find section within the class if section_name is provided
-      if (section_name) {
+      if(section_name) {
         const foundSection = await prisma.section.findFirst({
           where: { 
             class_id: classId,
@@ -288,7 +285,6 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
           },
           select: { section_id: true }
         });
-
         if (!foundSection) {
           return res.status(404).json({
             message: `Section '${section_name}' not found in class '${class_name}'`,
@@ -299,37 +295,40 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
       }
     }
 
-    // Process assigned_subjects_text for teachers
     let assignedSubjects: number[] = [];
-    if (assigned_subjects_text && classId) {
-      const subjectNames = assigned_subjects_text
-        .split(',')
-        .map((subject: string) => subject.trim())
-        .filter((subject: string) => subject.length > 0);
 
-      if (subjectNames.length > 0) {
-        const subjects = await prisma.subject.findMany({
-          where: {
-            class_id: classId,
-            subject_name: {
-              in: subjectNames
-            }
-          },
-          select: { subject_id: true }
-        });
+if (assigned_subjects_text && classId) {
+  const subjectNames = assigned_subjects_text
+    .split(",")
+    .map((subject: string) => subject.trim())
+    .filter((subject: string) => subject.length > 0);
 
-        assignedSubjects = subjects.map(subject => subject.subject_id);
-        
-        if (assignedSubjects.length !== subjectNames.length) {
-          return res.status(404).json({
-            message: `Some subjects not found in class '${class_name}'. Available subjects should be checked.`,
-            status: false,
-          });
-        }
-      }
+  if (subjectNames.length > 0) {
+    // Fetch subjects by classId + subject_name
+    const subjects = await prisma.subject.findMany({
+      where: {
+        class_id: Number(classId),
+        subject_name: {
+          in: subjectNames,
+        },
+      },
+      select: { subject_id: true, subject_name: true },
+    });
+
+    assignedSubjects = subjects.map((subject) => subject.subject_id);
+
+    if (assignedSubjects.length !== subjectNames.length) {
+      const foundNames = subjects.map((s) => s.subject_name);
+      const notFound = subjectNames.filter((name:any) => !foundNames.includes(name));
+
+      return res.status(404).json({
+        message: `Some subjects not found in class '${class_name}': ${notFound.join(", ")}. Please check available subjects.`,
+        status: false,
+      });
     }
+  }
+}
 
-    // Process class_assignments_text for teachers
     let classAssignments: number[] = [];
     if (class_assignments_text) {
       const classNames = class_assignments_text

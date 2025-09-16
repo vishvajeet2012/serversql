@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { sql } from "../db/inidex";
 import prisma from './../db/prisma';
+import { Prisma } from "@prisma/client";
 
 interface UserRow {
   user_id: number;
@@ -15,6 +16,7 @@ interface UserRow {
 }
 
 
+
 // export const createClass = async (req: Request, res: Response): Promise<Response> => {
 //   try {
 //     const { className, description, section_name, class_teacher_id } = req.body;
@@ -23,30 +25,30 @@ interface UserRow {
 //       return res.status(400).json({ error: "className is required" });
 //     }
 
-//     const classResult = await sql`
-//       INSERT INTO class (class_name, description) 
-//       VALUES (${className}, ${description}) 
-//       RETURNING *;
-//     `;
+//     const createdClass = await (prisma as any).class.create({
+//       data: {
+//         class_name: className,
+//         description: description || null,
+//       },
+//     });
 
-//     const createdClass = classResult[0];
 //     let createdSection = null;
 
 //     if (section_name) {
-//       const sectionResult = await sql`
-//         INSERT INTO section (class_id, section_name, class_teacher_id) 
-//         VALUES (${createdClass?.class_id}, ${section_name}, ${class_teacher_id || null}) 
-//         RETURNING *;
-//       `;
-      
-//       createdSection = sectionResult[0];
+//       createdSection = await (prisma as any).section.create({
+//         data: {
+//           class_id: createdClass.class_id,
+//           section_name: section_name,
+//           class_teacher_id: class_teacher_id || null,
+//         },
+//       });
 //     }
 
 //     return res.status(201).json({
 //       message: "Class created successfully",
 //       data: {
 //         class: createdClass,
-//         section: createdSection
+//         section: createdSection,
 //       },
 //     });
 //   } catch (error) {
@@ -56,45 +58,271 @@ interface UserRow {
 // };
 
 
+
+
+// export const createClass = async (req: Request, res: Response): Promise<Response> => {
+//   try {
+//     const {
+//       className,
+//       description,
+//       section_name,
+//       class_teacher_id,
+//       subjects, // can be string, string[], or {name, subject_teacher_id}[]
+//     } = req.body as {
+//       className?: string;
+//       description?: string | null;
+//       section_name?: string | null;
+//       class_teacher_id?: number | string | null;
+//       subjects?: unknown;
+//     };
+
+//     if (!className || typeof className !== "string" || !className.trim()) {
+//       return res.status(400).json({ error: "className is required" });
+//     }
+
+//     const classNameTrimmed = className.trim();
+//     const sectionNameTrimmed = typeof section_name === "string" ? section_name.trim() : null;
+//     const classTeacherId =
+//       class_teacher_id === undefined || class_teacher_id === null || class_teacher_id === ""
+//         ? null
+//         : Number(class_teacher_id);
+//     const subjectsToCreate = parseSubjects(subjects);
+
+//     const result = await prisma.$transaction(async (tx) => {
+//       // Create class (Renamedclass -> prisma.renamedclass)
+//       const createdClass = await tx.renamedclass.create({
+//         data: {
+//           class_name: classNameTrimmed,
+//           description: description ?? null,
+//         },
+//       });
+
+//       // Optionally create section
+//       let createdSection: any = null;
+//       if (sectionNameTrimmed && sectionNameTrimmed.length > 0) {
+//         createdSection = await tx.section.create({
+//           data: {
+//             class_id: createdClass.class_id,
+//             section_name: sectionNameTrimmed,
+//             class_teacher_id: classTeacherId ?? null, // unique column; may throw P2002 if duplicated
+//           },
+//         });
+//       }
+
+//       // Optionally create subjects for this class
+//       let createdSubjects: any[] = [];
+//       if (subjectsToCreate.length > 0) {
+//         const data = subjectsToCreate.map((s) => ({
+//           class_id: createdClass.class_id,
+//           subject_name: s.subject_name,
+//           subject_teacher_id: s.subject_teacher_id ?? null,
+//         }));
+
+//         // Prefer createManyAndReturn if available (Prisma >= 5.14 on supported DBs)
+//         const subjectDelegate: any = (tx as any).subject;
+//         if (subjectDelegate && typeof subjectDelegate.createManyAndReturn === "function") {
+//           // If you have a unique index on (class_id, subject_name), skipDuplicates can be enabled
+//           createdSubjects = await subjectDelegate.createManyAndReturn({
+//             data,
+//             // skipDuplicates: true, // enable if a unique constraint exists to enforce it at DB level
+//           });
+//         } else {
+//           // Fallback: create one-by-one to return created rows
+//           createdSubjects = await Promise.all(
+//             data.map((row) => tx.subject.create({ data: row }))
+//           );
+//         }
+//       }
+
+//       return { createdClass, createdSection, createdSubjects };
+//     });
+
+//     return res.status(201).json({
+//       message: "Class created successfully",
+//       data: {
+//         class: result.createdClass,
+//         section: result.createdSection,
+//         subjects: result.createdSubjects,
+//       },
+//     });
+//   } catch (err: any) {
+//     if (err instanceof Prisma.PrismaClientKnownRequestError) {
+//       if (err.code === "P2002") {
+//         return res.status(409).json({
+//           error: "Conflict: Unique constraint failed (possibly class_teacher_id already assigned).",
+//           details: err.meta,
+//         });
+//       }
+//     }
+
+//     console.error("Error creating class:", err);
+//     return res.status(500).json({ error: "Internal server error" });
+//   }
+// ;
+
+
+
+// Normalize first letter uppercase, rest lowercase
+function capitalizeFirst(raw: string): string {
+  const t = (raw ?? '').trim();
+  if (!t) return '';
+  const lower = t.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+// Build ["Section A", "Section B", ...] from "a,b,c" or "Section a, b"
+function buildSectionNames(input?: string | null): string[] {
+  if (!input) return [];
+  const parts = input
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const namesSet = new Set<string>();
+  for (let raw of parts) {
+    let s = raw.trim();
+    const lower = s.toLowerCase();
+    if (lower.startsWith('section ')) s = s.slice(8).trim();
+    const label = capitalizeFirst(s);
+    if (label) namesSet.add(`Section ${label}`);
+  }
+  return Array.from(namesSet);
+}
+
+// Parse comma-separated subjects string like "Enlish , math , biologiy"
+function parseSubjects(input?: string | null): string[] {
+  if (!input) return [];
+  return input
+    .split(',')
+    .map((s) => capitalizeFirst(s))
+    .filter(Boolean);
+}
+
 export const createClass = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { className, description, section_name, class_teacher_id } = req.body;
+    const { className, section_name, class_teacher_id, subjects } = req.body as {
+      className?: string;
+      section_name?: string | null;
+      class_teacher_id?: number | null;
+      subjects?: string | null;
+    };
 
-    if (!className) {
-      return res.status(400).json({ error: "className is required" });
+    if (!className || typeof className !== 'string' || !className.trim()) {
+      return res.status(400).json({ error: 'className is required' });
     }
 
-    const createdClass = await (prisma as any).class.create({
-      data: {
-        class_name: className,
-        description: description || null,
-      },
-    });
+    const sectionNames = buildSectionNames(section_name);
+    const subjectNames = parseSubjects(subjects);
 
-    let createdSection = null;
-
-    if (section_name) {
-      createdSection = await (prisma as any).section.create({
+    const result = await prisma.$transaction(async (tx) => {
+      // 1) Create class (model is Renamedclass mapped to table "class")
+      const createdClass = await tx.renamedclass.create({
         data: {
-          class_id: createdClass.class_id,
-          section_name: section_name,
-          class_teacher_id: class_teacher_id || null,
+          class_name: className.trim(),
+          description: null,
         },
       });
-    }
+
+      let teacherIdToAssign: number | null = null;
+      if (typeof class_teacher_id === 'number') {
+        const user = await tx.users.findUnique({
+          where: { user_id: class_teacher_id },
+          select: { user_id: true },
+        });
+        if (!user) {
+          throw Object.assign(new Error('Invalid class_teacher_id: user not found'), {
+            code: 'USER_NOT_FOUND',
+          });
+        }
+        await tx.teacher_profile.upsert({
+          where: { teacher_id: class_teacher_id },
+          update: {},
+          create: { teacher_id: class_teacher_id, assigned_subjects: null, class_assignments: null },
+        });
+        teacherIdToAssign = class_teacher_id;
+      }
+
+      let createdSections: Array<{ section_id: number; section_name: string; class_teacher_id: number | null }> = [];
+      if (sectionNames.length > 0) {
+        const sectionData = sectionNames.map((name, idx) => ({
+          class_id: createdClass.class_id,
+          section_name: name,
+          class_teacher_id: idx === 0 ? teacherIdToAssign : null,
+        }));
+
+        await tx.section.createMany({
+          data: sectionData,
+          skipDuplicates: true,
+        });
+
+        createdSections = await tx.section.findMany({
+          where: {
+            class_id: createdClass.class_id,
+            section_name: { in: sectionNames },
+          },
+          orderBy: { section_id: 'asc' },
+        });
+      }
+
+      let createdSubjects: Array<{ subject_id: number; subject_name: string; subject_teacher_id: number | null }> = [];
+      if (subjectNames.length > 0) {
+        const existing = await tx.subject.findMany({
+          where: { class_id: createdClass.class_id, subject_name: { in: subjectNames } },
+          select: { subject_name: true },
+        });
+        const existingSet = new Set(existing.map((e) => e.subject_name));
+
+        const toInsert = subjectNames
+          .filter((n) => !existingSet.has(n))
+          .map((n) => ({
+            class_id: createdClass.class_id,
+            subject_name: n,
+            subject_teacher_id: null,
+          }));
+
+        if (toInsert.length > 0) {
+          await tx.subject.createMany({
+            data: toInsert,
+            skipDuplicates: true,
+          });
+        }
+
+        createdSubjects = await tx.subject.findMany({
+          where: { class_id: createdClass.class_id, subject_name: { in: subjectNames } },
+          orderBy: { subject_id: 'asc' },
+        });
+      }
+
+      return { createdClass, createdSections, createdSubjects };
+    });
 
     return res.status(201).json({
-      message: "Class created successfully",
+      message: 'Class created successfully',
       data: {
-        class: createdClass,
-        section: createdSection,
+        class: result.createdClass,
+        sections: result.createdSections,
+        subjects: result.createdSubjects,
       },
     });
-  } catch (error) {
-    console.error("Error creating class:", error);
-    return res.status(500).json({ error: "Internal server error" });
+  } catch (error: any) {
+    if (error?.code === 'USER_NOT_FOUND') {
+      return res.status(400).json({ error: 'Invalid class_teacher_id: user not found' });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return res.status(409).json({
+          error:
+            'Conflict: unique constraint violated (likely class_teacher_id already assigned to another section)',
+          meta: error.meta,
+        });
+      }
+    }
+    console.error('Error creating class:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-};
+}
+
+
 
 
 export const assignSubjectToClass = async (req: Request, res: Response): Promise<Response> => {
