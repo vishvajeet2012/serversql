@@ -5,6 +5,7 @@ import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "
 import {  createSubject } from "../controlers/subjectControler";
 import { getAllTeacherProfiles } from "../controlers/teacherProfile";
 import { getSectionDetails} from "../controlers/Sections"
+import {getTotals } from "../controlers/overVIewControler"
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
 
@@ -26,4 +27,17 @@ userRouter.post("/getsectiondetails" ,getSectionDetails)
 userRouter.post("/createSubject" , createSubject)
 
 userRouter.post("/createclass",createClass)
+
+///////// overViews ///////////////// 
+userRouter.get("/gettotals",getTotals )
+
+
+
+
+
+
+
+
+
+
 export default userRouter;
