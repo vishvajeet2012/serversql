@@ -70,13 +70,11 @@ export const getSectionDetails = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Get section with all related data
     const sectionData = await prisma.section.findUnique({
       where: {
         section_id: sectionId
       },
       include: {
-        // Class details
         Renamedclass: true,
         
         // All students in this section
@@ -107,10 +105,9 @@ export const getSectionDetails = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Get class teacher details if exists
     let classTeacherDetails: TeacherDetail | undefined;
     if (sectionData.class_teacher_id) {
-      const classTeacher = await prisma.teacher_profile.findUnique({
+      const classTeacher = await prisma.teacher_profile?.findUnique({
         where: {
           teacher_id: sectionData.class_teacher_id
         },
@@ -203,7 +200,7 @@ export const getSectionDetails = async (req: Request, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error : undefined
+    error :error
     });
   }
 };
