@@ -5,8 +5,14 @@
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
-    "build": "tsc",
-    "dev": "ts-node-dev --respawn --transpile-only server.ts",
+      "build": "tsc && prisma generate",
+
+   // "build": "tsc",
+      "dev": "ts-node-dev --respawn --transpile-only server.ts",
+  "postinstall": "prisma generate",
+  "migrate:deploy": "prisma migrate deploy",
+
+   /// "dev": "ts-node-dev --respawn --transpile-only server.ts",
     "dev:nodemon": "nodemon --exec ts-node server.ts",
     "dev:ts-node": "ts-node server.ts",
     "clean": "rm -rf dist",
