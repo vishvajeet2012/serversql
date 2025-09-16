@@ -29,232 +29,7 @@ type StudentClassAssign = { class_id: number; section_id: number };
 type ClassTeacherAssign = { section_id: number; teacher_id?: number };
 type SubjectTeacherAssign = { subject_id: number; teacher_id?: number };
 
-export const manageStudentss = async (req: Request, res: Response): Promise<Response> => {
-  try {
-    const {
-      user_id,
-      // user fields
-      name,
-      email,
-      mobile_number,
-      role,
-      status,
-      // student fields
-      roll_number,
-      class_id,
-      section_id,
-      dob,
-      guardian_name,
-      guardian_mobile_number,
-      student_mobile_number,
-      // teacher fields
-      assigned_subjects,
-      class_assignments,
-      // assign fields
-      studentClass,   // { class_id, section_id }
-      classTeacher,   // { section_id, teacher_id? }
-      subjectTeacher, // { subject_id, teacher_id? }
-      // remarks
-      remarks,
-    } = req.body as any;
 
-    const parsedUserId = Number(user_id?.toString().trim());
-    if (!parsedUserId) {
-      return res.status(400).json({ message: 'user id required please try again', status: false });
-    }
-
-    // Optional: require authenticated admin actor id from middleware
-    const actorId = (req as any)?.auth?.user_id ?? (req as any)?.user?.user_id ?? 0;
-
-    // prevent setting role to Admin via this endpoint
-    if (role === 'Admin') {
-      return res.status(403).json({
-        message: 'You cannot change role to admin — permission not allowed.',
-        status: false,
-      });
-    }
-
-    const existing = await prisma.users.findUnique({
-      where: { user_id: parsedUserId },
-      select: { user_id: true, role: true },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ message: 'user not found', status: false });
-    }
-
-    const now = new Date();
-
-    const result = await prisma.$transaction(async (tx) => {
-      const auditLogs: Array<{
-        user_id: number;
-        action: string;
-        entity_type: string;
-        entity_id: number;
-        remarks?: string;
-      }> = [];
-
-      // 1) Update users table (only provided fields)
-      const userData: any = { updated_at: now };
-      if (name !== undefined) userData.name = name;
-      if (email !== undefined) userData.email = email;
-      if (mobile_number !== undefined) userData.mobile_number = mobile_number;
-      if (role !== undefined) userData.role = role;
-      if (status !== undefined) userData.status = status;
-
-      const updatedUser = await tx.users.update({
-        where: { user_id: parsedUserId },
-        data: userData,
-        select: { user_id: true, role: true },
-      });
-
-      if (Object.keys(userData).length > 1) {
-        auditLogs.push({
-          user_id: actorId,
-          action: 'UPDATE_USER',
-          entity_type: 'users',
-          entity_id: parsedUserId,
-          remarks,
-        });
-      }
-
-      // 2) Upsert student profile (if any student fields present)
-      const hasStudentFields =
-        roll_number !== undefined ||
-        class_id !== undefined ||
-        section_id !== undefined ||
-        dob !== undefined ||
-        guardian_name !== undefined ||
-        guardian_mobile_number !== undefined ||
-        student_mobile_number !== undefined ||
-        studentClass !== undefined;
-
-      if (hasStudentFields) {
-        const sc: StudentClassAssign | undefined = studentClass;
-        const newClassId = sc?.class_id ?? class_id;
-        const newSectionId = sc?.section_id ?? section_id;
-
-        const studentData: any = {};
-        if (roll_number !== undefined) studentData.roll_number = roll_number;
-        if (newClassId !== undefined) studentData.class_id = Number(newClassId);
-        if (newSectionId !== undefined) studentData.section_id = Number(newSectionId);
-        if (dob !== undefined) studentData.dob = dob ? new Date(dob) : null;
-        if (guardian_name !== undefined) studentData.guardian_name = guardian_name;
-        if (guardian_mobile_number !== undefined) studentData.guardian_mobile_number = guardian_mobile_number;
-        if (student_mobile_number !== undefined) studentData.student_mobile_number = student_mobile_number;
-
-        await tx.student_profile.upsert({
-          where: { student_id: parsedUserId },
-          create: { student_id: parsedUserId, roll_number: roll_number ?? '', class_id: Number(newClassId), section_id: Number(newSectionId), ...studentData },
-          update: studentData,
-        });
-
-        auditLogs.push({
-          user_id: actorId,
-          action: 'UPSERT_STUDENT_PROFILE',
-          entity_type: 'student_profile',
-          entity_id: parsedUserId,
-          remarks,
-        });
-      }
-
-      // 3) Upsert teacher profile (if any teacher fields present or assignment present)
-      const hasTeacherFields =
-        assigned_subjects !== undefined ||
-        class_assignments !== undefined ||
-        classTeacher !== undefined ||
-        subjectTeacher !== undefined;
-
-      if (hasTeacherFields) {
-        const teacherData: any = {};
-        if (assigned_subjects !== undefined) teacherData.assigned_subjects = assigned_subjects;
-        if (class_assignments !== undefined) teacherData.class_assignments = class_assignments;
-
-        await tx.teacher_profile.upsert({
-          where: { teacher_id: parsedUserId },
-          create: { teacher_id: parsedUserId, ...teacherData },
-          update: teacherData,
-        });
-
-        auditLogs.push({
-          user_id: actorId,
-          action: 'UPSERT_TEACHER_PROFILE',
-          entity_type: 'teacher_profile',
-          entity_id: parsedUserId,
-          remarks,
-        });
-      }
-
-      // 4) Assign class teacher to a section (optional)
-      if (classTeacher?.section_id) {
-        const ct: ClassTeacherAssign = classTeacher;
-        const assignTeacherId = Number(ct.teacher_id ?? parsedUserId);
-
-        await tx.section.update({
-          where: { section_id: Number(ct.section_id) },
-          data: { class_teacher_id: assignTeacherId },
-        });
-
-        auditLogs.push({
-          user_id: actorId,
-          action: 'ASSIGN_CLASS_TEACHER',
-          entity_type: 'section',
-          entity_id: Number(ct.section_id),
-          remarks,
-        });
-      }
-
-      // 5) Assign subject teacher (optional)
-      if (subjectTeacher?.subject_id) {
-        const st: SubjectTeacherAssign = subjectTeacher;
-        const assignTeacherId = Number(st.teacher_id ?? parsedUserId);
-
-        await tx.subject.update({
-          where: { subject_id: Number(st.subject_id) },
-          data: { subject_teacher_id: assignTeacherId },
-        });
-
-        auditLogs.push({
-          user_id: actorId,
-          action: 'ASSIGN_SUBJECT_TEACHER',
-          entity_type: 'subject',
-          entity_id: Number(st.subject_id),
-          remarks,
-        });
-      }
-
-      // 6) Persist audit logs
-      if (auditLogs.length > 0) {
-        await tx.audit_log.createMany({
-          data: auditLogs.map((l) => ({ ...l, timestamp: now })),
-        });
-      }
-
-      // 7) Return consolidated view
-      const final = await tx.users.findUnique({
-        where: { user_id: parsedUserId },
-        include: {
-          student_profile: true,
-          teacher_profile: true,
-        },
-      });
-
-      return final;
-    });
-
-    return res.status(200).json({
-      message: 'update successfully',
-      status: true,
-      data: result,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      message: 'internal server error',
-      status: false,
-      error,
-    });
-  }
-};
 /////////////////////
 
 // export const manageStudents =async (req:Request,res:Response): Promise<Response> => {
@@ -339,11 +114,13 @@ export const manageStudentss = async (req: Request, res: Response): Promise<Resp
 
 // }
 
-export const manageStudents = async (req: Request, res: Response): Promise<Response> => {
+export const manageStudentsss = async (req: Request, res: Response): Promise<Response> => {
   try {
     console.log(req.body);
 
-    const { status, user_id, mobile_number, role, name, email , assigned , class_assignments  } = req.body as any;
+    const { status, user_id, mobile_number, role, name, email , assigned , class_assignments , roll_number, class_name,section_name, guardian_name,guardian_mobile_number ,student_mobile_number, dob ,  assigned_subjects_text 
+      ,class_assignments_text } = req.body as any;
+///assigned_subjects_text = hindi,english math 
 
     const parsedUserId = Number(user_id?.toString().trim());
     if (!parsedUserId) {
@@ -408,6 +185,292 @@ export const manageStudents = async (req: Request, res: Response): Promise<Respo
   }
 };
 
+export const manageStudents = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    console.log(req.body);
+
+    const { 
+      status, 
+      user_id, 
+      mobile_number, 
+      role, 
+      name, 
+      email, 
+      assigned, 
+      class_assignments, 
+      roll_number, 
+      class_name,
+      section_name, 
+      guardian_name,
+      guardian_mobile_number,
+      student_mobile_number, 
+      dob,  
+      assigned_subjects_text,
+      class_assignments_text 
+    } = req.body as any;
+
+    const parsedUserId = Number(user_id?.toString().trim());
+    if (!parsedUserId) {
+      return res.status(400).json({
+        message: "user id required please try again",
+        status: false,
+      });
+    }
+
+    if (role === "Admin") {
+      return res.status(403).json({
+        message: "You cannot change role to admin — permission not allowed.",
+      });
+    }
+
+    // Check if user exists
+    const existing = await prisma.users.findUnique({
+      where: { user_id: parsedUserId },
+      select: { 
+        user_id: true, 
+        role: true,
+        student_profile: {
+          select: {
+            student_id: true,
+            class_id: true,
+            section_id: true
+          }
+        },
+        teacher_profile: {
+          select: {
+            teacher_id: true
+          }
+        }
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "user not found",
+        status: false,
+      });
+    }
+
+    const now = new Date();
+    const userData: any = { updated_at: now };
+
+    // Update basic user fields
+    if (name !== undefined) userData.name = name;            
+    if (email !== undefined) userData.email = email;         
+    if (mobile_number !== undefined) userData.mobile_number = mobile_number;
+    if (role !== undefined) userData.role = role;            
+    if (status !== undefined) userData.status = status;    
+
+    // Handle class and section lookup if provided
+    let classId: number | undefined;
+    let sectionId: number | undefined;
+
+    if (class_name) {
+      const foundClass = await prisma.renamedclass.findFirst({
+        where: { class_name: class_name.trim() },
+        select: { class_id: true }
+      });
+
+      if (!foundClass) {
+        return res.status(404).json({
+          message: `Class '${class_name}' not found`,
+          status: false,
+        });
+      }
+      classId = foundClass.class_id;
+
+      // Find section within the class if section_name is provided
+      if (section_name) {
+        const foundSection = await prisma.section.findFirst({
+          where: { 
+            class_id: classId,
+            section_name: section_name.trim()
+          },
+          select: { section_id: true }
+        });
+
+        if (!foundSection) {
+          return res.status(404).json({
+            message: `Section '${section_name}' not found in class '${class_name}'`,
+            status: false,
+          });
+        }
+        sectionId = foundSection.section_id;
+      }
+    }
+
+    // Process assigned_subjects_text for teachers
+    let assignedSubjects: number[] = [];
+    if (assigned_subjects_text && classId) {
+      const subjectNames = assigned_subjects_text
+        .split(',')
+        .map((subject: string) => subject.trim())
+        .filter((subject: string) => subject.length > 0);
+
+      if (subjectNames.length > 0) {
+        const subjects = await prisma.subject.findMany({
+          where: {
+            class_id: classId,
+            subject_name: {
+              in: subjectNames
+            }
+          },
+          select: { subject_id: true }
+        });
+
+        assignedSubjects = subjects.map(subject => subject.subject_id);
+        
+        if (assignedSubjects.length !== subjectNames.length) {
+          return res.status(404).json({
+            message: `Some subjects not found in class '${class_name}'. Available subjects should be checked.`,
+            status: false,
+          });
+        }
+      }
+    }
+
+    // Process class_assignments_text for teachers
+    let classAssignments: number[] = [];
+    if (class_assignments_text) {
+      const classNames = class_assignments_text
+        .split(',')
+        .map((className: string) => className.trim())
+        .filter((className: string) => className.length > 0);
+
+      if (classNames.length > 0) {
+        const classes = await prisma.renamedclass.findMany({
+          where: {
+            class_name: {
+              in: classNames
+            }
+          },
+          select: { class_id: true }
+        });
+
+        classAssignments = classes.map(cls => cls.class_id);
+        
+        if (classAssignments.length !== classNames.length) {
+          return res.status(404).json({
+            message: "Some classes not found in class assignments",
+            status: false,
+          });
+        }
+      }
+    }
+
+    // Start transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Update user data
+      const updatedUser = await tx.users.update({
+        where: { user_id: parsedUserId },
+        data: userData,
+        select: {
+          user_id: true,
+          name: true,
+          email: true,
+          mobile_number: true,
+          profile_picture: true,
+          role: true,
+          status: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
+
+      // Handle Student Profile Updates
+      if (existing.role === "Student" || role === "Student") {
+        const studentData: any = { updated_at: now };
+        
+        if (roll_number !== undefined) studentData.roll_number = roll_number?.toString().trim();
+        if (classId !== undefined) studentData.class_id = classId;
+        if (sectionId !== undefined) studentData.section_id = sectionId;
+        if (dob !== undefined) studentData.dob = new Date(dob);
+        if (guardian_name !== undefined) studentData.guardian_name = guardian_name;
+        if (guardian_mobile_number !== undefined) studentData.guardian_mobile_number = guardian_mobile_number;
+        if (student_mobile_number !== undefined) studentData.student_mobile_number = student_mobile_number;
+
+        if (Object.keys(studentData).length > 1) { // more than just updated_at
+          if (existing.student_profile) {
+            // Update existing student profile
+            await tx.student_profile.update({
+              where: { student_id: parsedUserId },
+              data: studentData
+            });
+          } else {
+            // Create new student profile - require class_id and section_id
+            if (!classId || !sectionId) {
+              throw new Error("class_name and section_name are required for creating new student profile");
+            }
+            if (!roll_number?.toString().trim()) {
+              throw new Error("roll_number is required for creating new student profile");
+            }
+
+            await tx.student_profile.create({
+              data: {
+                student_id: parsedUserId,
+                roll_number: roll_number.toString().trim(),
+                class_id: classId,
+                section_id: sectionId,
+                dob: dob ? new Date(dob) : null,
+                guardian_name: guardian_name || null,
+                guardian_mobile_number: guardian_mobile_number || null,
+                student_mobile_number: student_mobile_number || null,
+                ...studentData
+              }
+            });
+          }
+        }
+      }
+
+      // Handle Teacher Profile Updates
+      if (existing.role === "Teacher" || role === "Teacher") {
+        const teacherData: any = { updated_at: now };
+        
+        if (assignedSubjects.length > 0 || assigned_subjects_text !== undefined) {
+          teacherData.assigned_subjects = assignedSubjects;
+        }
+        if (classAssignments.length > 0 || class_assignments_text !== undefined) {
+          teacherData.class_assignments = classAssignments;
+        }
+
+        if (Object.keys(teacherData).length > 1) { // more than just updated_at
+          if (existing.teacher_profile) {
+            // Update existing teacher profile
+            await tx.teacher_profile.update({
+              where: { teacher_id: parsedUserId },
+              data: teacherData
+            });
+          } else {
+            // Create new teacher profile
+            await tx.teacher_profile.create({
+              data: {
+                teacher_id: parsedUserId,
+                assigned_subjects: assignedSubjects.length > 0 ? assignedSubjects : null,
+                class_assignments: classAssignments.length > 0 ? classAssignments : null,
+                ...teacherData
+              }
+            });
+          }
+        }
+      }
+
+      return updatedUser;
+    });
+
+    return res.status(200).json({ 
+      message: "Updated successfully", 
+      status: true, 
+      data: result 
+    });
+
+  } catch (error: any) {
+    console.error("Error in manageStudents:", error);
+    return res.status(500).json({
+      message: error.message || "Internal server error",
+      status: false,
+    });
+  }
+};
 
 
 
