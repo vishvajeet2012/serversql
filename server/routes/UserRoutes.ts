@@ -4,7 +4,7 @@ import {  addStudentProfile } from "../controlers/Profiles";
 import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "../controlers/class"
 import {  createSubject } from "../controlers/subjectControler";
 import { getAllTeacherProfiles } from "../controlers/teacherProfile";
-import { getSectionDetails} from "../controlers/Sections"
+import { getSectionDetails, SectionTeachersController} from "../controlers/Sections"
 import {getTotals } from "../controlers/overVIewControler"
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
@@ -22,14 +22,20 @@ userRouter.post("/searchClassBySectionWithQuery",searchClassBySectionWithQuery)
 
 //////////////////section //////////////////
 userRouter.post("/getsectiondetails" ,getSectionDetails)
+userRouter.post("/addsectionteacher" , SectionTeachersController.addSectionTeacher)
 
 
 userRouter.post("/createSubject" , createSubject)
 
 userRouter.post("/createclass",createClass)
 
+
 ///////// overViews ///////////////// 
 userRouter.get("/gettotals",getTotals )
+
+
+
+
 
 
 
