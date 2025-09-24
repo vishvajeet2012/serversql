@@ -259,7 +259,6 @@ export class SectionTeachersController {
     try {
       const { section_id, teacher_id, subject_ids = [] } = req.body;
 
-      // Validate required fields
       if (!section_id || !teacher_id) {
         res.status(400).json({
           success: false,

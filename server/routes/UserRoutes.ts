@@ -2,7 +2,7 @@ import { getAllUserData  ,addUserByAdmin, manageStudents,} from "../controlers/M
 import { authenticateJWT  ,DecodedToken} from "../middleware/AdminAuth";
 import {  addStudentProfile } from "../controlers/Profiles";
 import {createClass, getAllClassbysection, searchClassBySectionWithQuery} from "../controlers/class"
-import {  createSubject } from "../controlers/subjectControler";
+import {  createSubject, getSubjectByName } from "../controlers/subjectControler";
 import { getAllTeacherProfiles } from "../controlers/teacherProfile";
 import { getSectionDetails, SectionTeachersController} from "../controlers/Sections"
 import {getTotals } from "../controlers/overVIewControler"
@@ -24,14 +24,16 @@ userRouter.post("/searchClassBySectionWithQuery",searchClassBySectionWithQuery)
 userRouter.post("/getsectiondetails" ,getSectionDetails)
 userRouter.post("/addsectionteacher" , SectionTeachersController.addSectionTeacher)
 
-
+//////////////////// subject/ //////////////////   
 userRouter.post("/createSubject" , createSubject)
+userRouter.post('/searchsubject' ,getSubjectByName)
 
 userRouter.post("/createclass",createClass)
 
 
 ///////// overViews ///////////////// 
 userRouter.get("/gettotals",getTotals )
+
 
 
 

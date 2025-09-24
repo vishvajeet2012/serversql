@@ -114,3 +114,71 @@ export const deleteSubject = async (req: Request, res: Response): Promise<Respon
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+
+
+import prisma from '../db/prisma';
+
+export const getSubjectByName = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Subject name is required as a query parameter'
+      });
+    }
+
+    const subjects = await prisma.subject.findMany({
+      where: {
+        subject_name: {
+          contains: name,
+          mode: 'insensitive'
+        }
+      },
+      include: {
+        Renamedclass: {
+          select: {
+            class_id: true,
+            class_name: true,
+            description: true
+          }
+        },
+        test: {
+          select: {
+            test_id: true,
+            test_name: true,
+            date_conducted: true,
+            max_marks: true,
+            test_rank: true
+          }
+        }
+      },
+      orderBy: {
+        subject_name: 'asc'
+      }
+    });
+
+    if (subjects.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No subjects found matching "${name}"`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: subjects,
+      count: subjects.length
+    });
+
+  } catch (error) {
+    console.error('Error searching subjects:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while searching subjects'
+    });
+  }
+};
