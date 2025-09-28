@@ -1,9 +1,14 @@
-import { getAllTeacherProfiles, searchTeachersByName } from "../controlers/teacherProfile";
+import { getAllTeacherProfiles, getTeacherDashboardData, searchTeachersByName } from "../controlers/teacherProfile";
 
 import express, { Request, Response } from "express";
+import { authorizeTeacher } from "../middleware/teacherMiddleware";
 const teacherRouter = express.Router();
 
 teacherRouter.get("/getallteacher" , getAllTeacherProfiles)
 teacherRouter.post("/searchteacher", searchTeachersByName)
+
+
+////// teacehr dashborad data /////////////////
+teacherRouter.get("/getTeacherDashboardData" ,authorizeTeacher, getTeacherDashboardData)
 
 export default teacherRouter

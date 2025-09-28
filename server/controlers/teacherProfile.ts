@@ -221,3 +221,118 @@ export const assignTeacherToSubject = async (req: Request, res: Response): Promi
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+
+// src/controllers/teacherController.ts
+import prisma from '../db/prisma';
+
+import { RequestWithUser } from './../middleware/teacherMiddleware'; // Make sure this path is correct
+
+
+export const getTeacherDashboardData = async (req: RequestWithUser, res: Response) => {
+    const teacherId = req.user?.userId;
+
+    if (!teacherId) {
+        return res.status(401).json({ error: "Authentication error: User ID not found." });
+    } 
+
+    try {
+        const teacherAssignments = await prisma.section_teachers.findMany({
+            where: {
+                teacher_id: teacherId,
+            },
+            include: {
+                // For each assignment, get the full section details
+                section: {
+                    include: {
+                        // In each section, get the class it belongs to
+                        Renamedclass: {
+                            include: {
+                                // For that class, get all its subjects
+                                subject: true,
+                            }
+                        },
+                        // And in each section, get the list of students
+                        student_profile: {
+                            include: {
+                                // For each student, get their basic user info (like name)
+                                users: {
+                                    select: {
+                                        name: true,
+                                        email: true,
+                                        profile_picture: true,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // 2. Transform the data into a more frontend-friendly structure.
+        // We will group the sections by their parent class.
+        const classDataMap = new Map();
+
+        for (const assignment of teacherAssignments) {
+            const section = assignment.section;
+            const classInfo = section.Renamedclass;
+
+            // If we haven't seen this class yet, initialize it.
+            if (!classDataMap.has(classInfo.class_id)) {
+                classDataMap.set(classInfo.class_id, {
+                    classId: classInfo.class_id,
+                    className: classInfo.class_name,
+                    description: classInfo.description,
+                    // Map subjects to a cleaner format
+                    subjects: classInfo.subject.map(s => ({
+                        subjectId: s.subject_id,
+                        subjectName: s.subject_name
+                    })),
+                    sections: [], // Prepare to add sections to this class
+                });
+            }
+
+            // Get the class from the map and add the current section to it.
+            const currentClass = classDataMap.get(classInfo.class_id);
+            currentClass.sections.push({
+                sectionId: section.section_id,
+                sectionName: section.section_name,
+                isClassTeacher: section.class_teacher_id === teacherId, // Check if the teacher is the class teacher
+                studentCount: section.student_profile.length,
+                // Map students to a cleaner format
+                students: section.student_profile.map(sp => ({
+                    studentId: sp.student_id,
+                    name: sp.users.name,
+                    email: sp.users.email,
+                    rollNumber: sp.roll_number,
+                    profilePicture: sp.users.profile_picture
+                }))
+            });
+        }
+        
+        // Convert the map values to an array for the final response
+        const assignedClasses = Array.from(classDataMap.values());
+
+        // Also fetch teacher's own 
+        const teacherDetails = await prisma.users.findUnique({
+            where: { user_id: teacherId },
+            select: {
+                user_id: true,
+                name: true,
+                email: true,
+                profile_picture: true
+            }
+        });
+
+        res.status(200).json({
+            teacherDetails,
+            assignedClasses,
+        });
+
+    } catch (error) {
+        console.error("Error fetching teacher dashboard data:", error);
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+};

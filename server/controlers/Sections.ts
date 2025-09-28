@@ -251,7 +251,7 @@ interface ApiResponse<T = any> {
 }
 
 export class SectionTeachersController {
-  // Add a section teacher with optional subject assignments
+  // Add a section teacher  optional subject assignments
   static async addSectionTeacher(
     req: Request<{}, ApiResponse, AddSectionTeacherRequest>,
     res: Response<ApiResponse>
