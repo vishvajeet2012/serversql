@@ -226,8 +226,8 @@ export const assignTeacherToSubject = async (req: Request, res: Response): Promi
 
 // src/controllers/teacherController.ts
 import prisma from '../db/prisma';
+import { RequestWithUser } from "../middleware/auth";
 
-import { RequestWithUser } from './../middleware/teacherMiddleware'; // Make sure this path is correct
 
 
 export const getTeacherDashboardData = async (req: RequestWithUser, res: Response) => {
