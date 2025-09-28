@@ -7,8 +7,8 @@ import prisma from './../db/prisma';
 
 
 
-const JWT_SECRET: string = process.env.JWT_SECRET || "your_jwt_secret";
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
+const JWT_SECRET = "your_jwt_secret";
+const JWT_EXPIRES_IN= "7d";
 
 
 interface User {
