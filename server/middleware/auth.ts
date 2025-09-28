@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET: string = process.env.JWT_SECRET || "your-super-secret-jwt-key-at-least-32-characters-long";
+const JWT_SECRET: string = process.env.JWT_SECRET || "your_jwt_secret";
 
 export interface DecodedToken {
   userId: number;
@@ -11,27 +11,27 @@ export interface DecodedToken {
   exp: number;
 }
 
-
+export interface RequestWithUser extends Request {
+  user?: DecodedToken;
+}
 
 export const authenticateJWT = (
-  req: Request,
+  req: RequestWithUser,
   res: Response,
   next: NextFunction
 ): void => {
-
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
     res.status(401).json({ error: "Access token required" });
     return;
   }
-  
+
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err || !decoded) {
       res.status(401).json({ error: "Invalid or expired token" });
       return;
     }
-    (req as any).user = decoded as DecodedToken;
-    
+    req.user = decoded as DecodedToken;
     next();
   });
 };

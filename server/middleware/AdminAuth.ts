@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET: string = process.env.JWT_SECRET || "your-super-secret-jwt-key-at-least-32-characters-long";
+const JWT_SECRET: string = process.env.JWT_SECRET || "your_jwt_secret";
 
 export interface DecodedToken {
   userId: number;
