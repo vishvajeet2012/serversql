@@ -1,7 +1,6 @@
 import { Response } from 'express';
 import prisma from '../db/prisma';
 import { RequestWithUser } from "../middleware/auth";
-import { io } from '../server';
 
 export const createTestAndNotifyStudents = async (req: RequestWithUser, res: Response) => {
   if (!req.user) {
@@ -61,7 +60,7 @@ export const createTestAndNotifyStudents = async (req: RequestWithUser, res: Res
       });
 
       if (studentsInSection.length > 0) {
-        // Step 4: Emit real-time notifications to students via WebSocket
+        // Step 4: Store notifications in DB for students
         const notification = {
           title: `New Test Scheduled: ${test_name}`,
           message: `A new test has been scheduled for ${new Date(date_conducted).toLocaleDateString()}. Please prepare.`,
@@ -69,10 +68,7 @@ export const createTestAndNotifyStudents = async (req: RequestWithUser, res: Res
           section_id: section_id,
         };
 
-        // Emit to all connected clients (clients can filter based on user)
-        io.emit('newTestNotification', { notification, students: studentsInSection.map(s => s.student_id) });
-
-        // Optionally, still store in DB for persistence
+        // Store in DB for persistence
         const notificationData = studentsInSection.map(student => ({
           user_id: student.student_id,
           title: notification.title,
