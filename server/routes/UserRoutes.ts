@@ -6,6 +6,7 @@ import {  createSubject, getSubjectByName } from "../controlers/subjectControler
 import { getAllTeacherProfiles } from "../controlers/teacherProfile";
 import { getSectionDetails, SectionTeachersController} from "../controlers/Sections"
 import {getTotals } from "../controlers/overVIewControler"
+import { adminMarksController } from "../controlers/adminMarksController";
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
 
@@ -31,8 +32,15 @@ userRouter.post('/searchsubject' ,getSubjectByName)
 userRouter.post("/createclass",createClass)
 
 
-///////// overViews ///////////////// 
+///////// overViews /////////////////
 userRouter.get("/gettotals",getTotals )
+
+///////// admin marks management /////////////////
+userRouter.post("/approveMarks", authenticateJWT, adminMarksController.approveMarks);
+userRouter.post("/rejectMarks", authenticateJWT, adminMarksController.rejectMarks);
+userRouter.get("/getAllMarks", authenticateJWT, adminMarksController.getAllMarks);
+userRouter.get("/getPendingMarks", authenticateJWT, adminMarksController.getPendingMarks);
+userRouter.post("/bulkApproveMarks", authenticateJWT, adminMarksController.bulkApproveMarks);
 
 
 

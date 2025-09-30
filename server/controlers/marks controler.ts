@@ -446,3 +446,216 @@ export const marksController = {
     }
   }
 }
+
+
+
+
+export const adminMarksController = {
+  // Get all pending marks for approval
+  getPendingMarks: async (
+    req: RequestWithUser,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { page = 1, limit = 10, class_id, section_id } = req.query;
+      const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      const whereCondition: any = {
+        status: "PendingApproval"
+      };
+
+      if (class_id) {
+        whereCondition.test = {
+          class_id: parseInt(class_id as string)
+        };
+      }
+
+      if (section_id) {
+        if (whereCondition.test) {
+          whereCondition.test.section_id = parseInt(section_id as string);
+        } else {
+          whereCondition.test = {
+            section_id: parseInt(section_id as string)
+          };
+        }
+      }
+
+      const [pendingMarks, total] = await Promise.all([
+        prisma.marks.findMany({
+          where: whereCondition,
+          include: {
+            test: {
+              include: {
+                Renamedclass: true,
+                section: true,
+                subject: true,
+                teacher_profile: {
+                  include: {
+                    users: {
+                      select: {
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            student_profile: {
+              include: {
+                users: {
+                  select: {
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          },
+          skip,
+          take: parseInt(limit as string),
+          orderBy: { created_at: 'desc' }
+        }),
+        prisma.marks.count({ where: whereCondition })
+      ]);
+
+      res.status(200).json({
+        message: "Pending marks retrieved successfully",
+        data: pendingMarks,
+        pagination: {
+          current_page: parseInt(page as string),
+          total_pages: Math.ceil(total / parseInt(limit as string)),
+          total_records: total,
+          records_per_page: parseInt(limit as string)
+        }
+      });
+
+    } catch (error) {
+      console.error("Error fetching pending marks:", error);
+      res.status(500).json({ 
+        error: "Internal server error while fetching pending marks" 
+      });
+    }
+  },
+
+  // Approve or reject marks
+  approveMarks: async (
+    req: RequestWithUser,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { marks_id, action, remarks } = req.body; 
+      const admin_id = req.user?.user_id;
+
+      if (!marks_id || !action) {
+        res.status(400).json({ 
+          error: "Missing required fields: marks_id and action" 
+        });
+        return;
+      }
+
+      if (!['approve', 'reject'].includes(action)) {
+        res.status(400).json({ 
+          error: "Action must be either 'approve' or 'reject'" 
+        });
+        return;
+      }
+
+      const marks = await prisma.marks.findUnique({
+        where: { marks_id },
+        include: {
+          test: {
+            include: {
+              teacher_profile: {
+                include: {
+                  users: true
+                }
+              }
+            }
+          },
+          student_profile: {
+            include: {
+              users: true
+            }
+          }
+        }
+      });
+
+      if (!marks) {
+        res.status(404).json({ error: "Marks record not found" });
+        return;
+      }
+
+      if (marks.status !== "PendingApproval") {
+        res.status(400).json({ 
+          error: `Marks already ${marks?.status?.toLowerCase() ||false}` 
+        });
+        return;
+      }
+
+      const newStatus = action === 'approve' ? 'Approved' : 'Rejected';
+      
+      const updatedMarks = await prisma.marks.update({
+        where: { marks_id },
+        data: {
+          status: newStatus,
+          approved_by: admin_id,
+          approved_at: new Date(),
+          updated_at: new Date()
+        }
+      });
+
+      // Create audit log
+      await prisma.audit_log.create({
+        data: {
+          user_id: admin_id!,
+          action: action.toUpperCase() + "_MARKS",
+          entity_type: "marks",
+          entity_id: marks_id,
+          remarks: remarks || `Marks ${action}d for student ${marks.student_profile.users.name}`
+        }
+      });
+
+      // Notify teacher and student
+      const notifications = [
+        // Notify teacher
+        {
+          user_id: marks.test.teacher_profile.users.user_id,
+          title: `Marks ${action}d`,
+          message: `Your submitted marks for ${marks.student_profile.users.name} have been ${action}d by admin.`
+        }
+      ];
+
+      // Notify student only if approved
+      if (action === 'approve') {
+        notifications.push({
+          user_id: marks.student_profile.users.user_id,
+          title: "New Test Results Available",
+          message: `Your test results for ${marks.test.test_name} are now available.`
+        });
+      }
+
+      await Promise.all(
+        notifications.map(notification => 
+          prisma.notifications.create({ data: notification })
+        )
+      );
+
+      res.status(200).json({
+        message: `Marks ${action}d successfully`,
+        data: {
+          marks_id: updatedMarks.marks_id,
+          status: updatedMarks.status,
+          approved_by: admin_id,
+          approved_at: updatedMarks.approved_at
+        }
+      });
+
+    } catch (error) {
+      console.error("Error approving marks:", error);
+      res.status(500).json({ 
+        error: "Internal server error while processing marks approval" 
+      });
+    }
+  }
+};
