@@ -7,6 +7,8 @@ import { getAllTeacherProfiles } from "../controlers/teacherProfile";
 import { getSectionDetails, SectionTeachersController} from "../controlers/Sections"
 import {getTotals } from "../controlers/overVIewControler"
 import { adminMarksController } from "../controlers/adminMarksController";
+import { authenticateJWT as authenticate } from "../middleware/auth";
+
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
 
@@ -36,11 +38,11 @@ userRouter.post("/createclass",createClass)
 userRouter.get("/gettotals",getTotals )
 
 ///////// admin marks management /////////////////
-userRouter.post("/approveMarks", authenticateJWT, adminMarksController.approveMarks);
-userRouter.post("/rejectMarks", authenticateJWT, adminMarksController.rejectMarks);
-userRouter.get("/getAllMarks", authenticateJWT, adminMarksController.getAllMarks);
-userRouter.get("/getPendingMarks", authenticateJWT, adminMarksController.getPendingMarks);
-userRouter.post("/bulkApproveMarks", authenticateJWT, adminMarksController.bulkApproveMarks);
+userRouter.post("/approveMarks", authenticate, authenticateJWT, adminMarksController.approveMarks);
+userRouter.post("/rejectMarks", authenticate, authenticateJWT ,adminMarksController.rejectMarks);
+userRouter.get("/getAllMarks", adminMarksController.getAllMarks);
+userRouter.get("/getPendingMarks", adminMarksController.getPendingMarks);
+userRouter.post("/bulkApproveMarks", authenticate, authenticateJWT, adminMarksController.bulkApproveMarks);
 
 
 

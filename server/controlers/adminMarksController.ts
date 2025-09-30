@@ -384,7 +384,7 @@ export const adminMarksController = {
     res: Response
   ): Promise<void> => {
     try {
-      const { page = 1, limit = 50 } = req.query;
+      const { page = 1, limit = 50 } = req.body;
 
       const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 

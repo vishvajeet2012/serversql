@@ -23,6 +23,12 @@
     "declarationMap": true,
     "declarationDir": "./dist/types",
 
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0",
+
+    "removeComments": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
