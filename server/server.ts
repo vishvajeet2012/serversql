@@ -33,5 +33,8 @@ app.use("/api/teacher", TeachRoutes);
 app.get("/", (req: Request, res: Response) => {
   res.send("🚀 Express + Vercel running successfully!");
 });
-
+const port = 5000
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
+});
 export default app;
