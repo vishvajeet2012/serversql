@@ -384,9 +384,11 @@ export const adminMarksController = {
     res: Response
   ): Promise<void> => {
     try {
-      const { page = 1, limit = 50 } = req.body;
+      const body = req.body || {};
+      const page = Number(body.page) || 1;
+      const limit = Number(body.limit) || 50;
 
-      const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+      const skip = (page - 1) * limit;
 
       const marks = await prisma.marks.findMany({
         where: {
@@ -431,7 +433,7 @@ export const adminMarksController = {
           { created_at: 'asc' } // Oldest first for approval queue
         ],
         skip,
-        take: parseInt(limit as string)
+        take: limit
       });
 
       const total = await prisma.marks.count({
@@ -456,10 +458,10 @@ export const adminMarksController = {
           updated_at: mark.updated_at
         })),
         pagination: {
-          page: parseInt(page as string),
-          limit: parseInt(limit as string),
+          page,
+          limit,
           total,
-          pages: Math.ceil(total / parseInt(limit as string))
+          pages: Math.ceil(total / limit)
         }
       });
 
