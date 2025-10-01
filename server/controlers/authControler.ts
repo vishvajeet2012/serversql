@@ -463,18 +463,184 @@ export const registerUser = async (req: Request, res: Response): Promise<Respons
   }
 };
 
+// export const loginUser = async (req: Request, res: Response): Promise<Response> => {
+//   try {
+//     const { email, password, role } = req.body as { 
+//       email?: string; 
+//       password?: string; 
+//       role?: string;
+//     };
+
+//     console.log(role);
+
+//     if (!email || !password || !role) {
+//       return res.status(400).json({ error: "Email, password, and role are required" });
+//     }
+
+//     // Find user with specified email, role, and active status
+//     const user = await prisma.users.findFirst({
+//       where: {
+//         email: email,
+//         role: role,
+//         status: 'Active'
+//       },
+//       select: {
+//         user_id: true,
+//         name: true,
+//         email: true,
+//         mobile_number: true,
+//         profile_picture: true,
+//         password_hash: true,
+//         role: true,
+//         status: true,
+//         created_at: true,
+//         updated_at: true
+//       }
+//     });
+
+//     console.log(user);
+
+//     if (!user) {
+//       return res.status(403).json({ error: "Invalid credentials or role specified" });
+//     }
+
+//     let profileData: any = null;
+
+//     // Fetch student profile if user is a student
+//     if (user.role === "Student") {
+//       try {
+//         const studentProfile = await prisma.student_profile.findUnique({
+//           where: {
+//             student_id: user.user_id
+//           }
+//         });
+
+//         if (studentProfile) {
+    
+//           const classData =await (prisma as any).Renamedclass.findUnique({
+//             where: { class_id: studentProfile.class_id },
+//             select: { class_name: true }
+//           });
+
+//           const sectionData = await prisma.section.findUnique({
+//             where: { section_id: studentProfile.section_id },
+//             select: { section_name: true }
+//           });
+
+//           profileData = {
+//             student_id: studentProfile.student_id,
+//             roll_number: studentProfile.roll_number,
+//             class_id: studentProfile.class_id,
+//             section_id: studentProfile.section_id,
+//             dob: studentProfile.dob,
+//             guardian_name: studentProfile.guardian_name,
+//             guardian_mobile_number: studentProfile.guardian_mobile_number,
+//             student_mobile_number: studentProfile.student_mobile_number,
+//             created_at: studentProfile.created_at,
+//             updated_at: studentProfile.updated_at,
+//             class_name: classData?.class_name || null,
+//             section_name: sectionData?.section_name || null
+//           };
+//         }
+//       } catch (error) {
+//         console.log("Error fetching student profile:", error);
+//         profileData = null;
+//       }
+//     }
+
+//     if (user.role === "Teacher") {
+//       try {
+//         const teacherProfile = await prisma.teacher_profile.findUnique({
+//           where: {
+//             teacher_id: user.user_id
+//           },
+//           select: {
+//             teacher_id: true,
+//             assigned_subjects: true,
+//             class_assignments: true,
+//             created_at: true,
+//             updated_at: true
+//           }
+//         });
+//         profileData = teacherProfile || null;
+//       } catch (error) {
+//         console.log("Error fetching teacher profile:", error);
+//         profileData = null;
+//       }
+//     }
+
+//     // Verify password
+//     const isValidPassword = await bcrypt.compare(password, user.password_hash!);
+//     if (!isValidPassword) {
+//       return res.status(401).json({ error: "Invalid email or password" });
+//     }
+
+//     // Generate JWT token
+//     const token = jwt.sign(
+//       { userId: user.user_id, email: user.email, role: user.role },
+//       JWT_SECRET,
+//       { expiresIn: JWT_EXPIRES_IN } as SignOptions
+//     );
+
+//     return res.json({
+//       message: "Login successful",
+//       token,
+//       user: {
+//         id: user.user_id,
+//         name: user.name,
+//         email: user.email,
+//         mobileNumber: user.mobile_number,
+//         profilePicture: user.profile_picture,
+//         role: user.role,
+//         status: user.status,
+//         createdAt: user.created_at,
+//         updatedAt: user.updated_at
+//       },
+//       profile: profileData,
+//     });
+
+//   } catch (error) {
+//     console.error("Login error:", error);
+//     return res.status(500).json({ error: "Login failed" });
+//   }
+// };
+
+
+interface LoginRequestBody {
+  email?: string;
+  password?: string;
+  role?: string;
+}
+
+
 export const loginUser = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { email, password, role } = req.body as { 
-      email?: string; 
-      password?: string; 
-      role?: string;
-    };
+    const { email, password, role } = req.body as LoginRequestBody;
 
-    console.log(role);
+    console.log('Login attempt for role:', role);
 
+    // Validate required fields
     if (!email || !password || !role) {
-      return res.status(400).json({ error: "Email, password, and role are required" });
+      return res.status(400).json({ 
+        error: "Email, password, and role are required",
+        details: {
+          email: !email ? "Email is required" : undefined,
+          password: !password ? "Password is required" : undefined,
+          role: !role ? "Role is required" : undefined
+        }
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Validate role
+    const validRoles = ['Student', 'Teacher', 'Admin'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: "Invalid role specified" });
     }
 
     // Find user with specified email, role, and active status
@@ -498,10 +664,21 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
       }
     });
 
-    console.log(user);
+    console.log('User found:', user ? 'Yes' : 'No');
 
     if (!user) {
-      return res.status(403).json({ error: "Invalid credentials or role specified" });
+      return res.status(401).json({ 
+        error: "Invalid credentials or inactive account",
+        message: "Please check your email, password, and role"
+      });
+    }
+
+    // Verify password before fetching profile data
+    const isValidPassword = await bcrypt.compare(password, user.password_hash!);
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        error: "Invalid email or password" 
+      });
     }
 
     let profileData: any = null;
@@ -516,15 +693,15 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
         });
 
         if (studentProfile) {
-    
-          const classData =await (prisma as any).Renamedclass.findUnique({
+          // Fetch class and section details
+          const classData = await (prisma as any).Renamedclass.findUnique({
             where: { class_id: studentProfile.class_id },
-            select: { class_name: true }
+            select: { class_id: true, class_name: true }
           });
 
           const sectionData = await prisma.section.findUnique({
             where: { section_id: studentProfile.section_id },
-            select: { section_name: true }
+            select: { section_id: true, section_name: true }
           });
 
           profileData = {
@@ -543,11 +720,12 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
           };
         }
       } catch (error) {
-        console.log("Error fetching student profile:", error);
+        console.error("Error fetching student profile:", error);
         profileData = null;
       }
     }
 
+    // Fetch teacher profile if user is a teacher
     if (user.role === "Teacher") {
       try {
         const teacherProfile = await prisma.teacher_profile.findUnique({
@@ -562,27 +740,106 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
             updated_at: true
           }
         });
-        profileData = teacherProfile || null;
+
+        if (teacherProfile) {
+          let enrichedSubjects = null;
+          let enrichedClassAssignments = null;
+
+          // Handle assigned_subjects if it contains subject IDs
+          if (teacherProfile.assigned_subjects && Array.isArray(teacherProfile.assigned_subjects)) {
+            try {
+              const subjectIds = teacherProfile.assigned_subjects as number[];
+              
+              if (subjectIds.length > 0) {
+                const subjects = await prisma.subject.findMany({
+                  where: { subject_id: { in: subjectIds } },
+                  select: { 
+                    subject_id: true, 
+                    subject_name: true, 
+                    class_id: true 
+                  }
+                });
+                enrichedSubjects = subjects;
+              } else {
+                enrichedSubjects = [];
+              }
+            } catch (error) {
+              console.error("Error enriching subjects:", error);
+              enrichedSubjects = teacherProfile.assigned_subjects;
+            }
+          } else {
+            enrichedSubjects = teacherProfile.assigned_subjects;
+          }
+
+          // Handle class_assignments if it contains class/section IDs
+          if (teacherProfile.class_assignments && Array.isArray(teacherProfile.class_assignments)) {
+            try {
+              const classAssignments = teacherProfile.class_assignments as Array<{
+                class_id: number;
+                section_id: number;
+              }>;
+
+              if (classAssignments.length > 0) {
+                const enrichedAssignments = await Promise.all(
+                  classAssignments.map(async (assignment) => {
+                    const classData = await (prisma as any).Renamedclass.findUnique({
+                      where: { class_id: assignment.class_id },
+                      select: { class_id: true, class_name: true }
+                    });
+
+                    const sectionData = await prisma.section.findUnique({
+                      where: { section_id: assignment.section_id },
+                      select: { section_id: true, section_name: true }
+                    });
+
+                    return {
+                      class_id: assignment.class_id,
+                      section_id: assignment.section_id,
+                      class_name: classData?.class_name || null,
+                      section_name: sectionData?.section_name || null
+                    };
+                  })
+                );
+
+                enrichedClassAssignments = enrichedAssignments;
+              } else {
+                enrichedClassAssignments = [];
+              }
+            } catch (error) {
+              console.error("Error enriching class assignments:", error);
+              enrichedClassAssignments = teacherProfile.class_assignments;
+            }
+          } else {
+            enrichedClassAssignments = teacherProfile.class_assignments;
+          }
+
+          profileData = {
+            teacher_id: teacherProfile.teacher_id,
+            assigned_subjects: enrichedSubjects,
+            class_assignments: enrichedClassAssignments,
+            created_at: teacherProfile.created_at,
+            updated_at: teacherProfile.updated_at
+          };
+        }
       } catch (error) {
-        console.log("Error fetching teacher profile:", error);
+        console.error("Error fetching teacher profile:", error);
         profileData = null;
       }
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash!);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
-
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.user_id, email: user.email, role: user.role },
+      { 
+        userId: user.user_id, 
+        email: user.email, 
+        role: user.role 
+      },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN } as SignOptions
     );
 
-    return res.json({
+    // Return success response
+    return res.status(200).json({
       message: "Login successful",
       token,
       user: {
@@ -596,12 +853,26 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
         createdAt: user.created_at,
         updatedAt: user.updated_at
       },
-      profile: profileData,
+      profile: profileData
     });
 
   } catch (error) {
     console.error("Login error:", error);
-    return res.status(500).json({ error: "Login failed" });
+    
+    // Handle specific Prisma errors
+    if (error instanceof Error) {
+      if (error.message.includes('prisma')) {
+        return res.status(500).json({ 
+          error: "Database error occurred",
+          message: "Please try again later"
+        });
+      }
+    }
+
+    return res.status(500).json({ 
+      error: "Login failed",
+      message: "An unexpected error occurred"
+    });
   }
 };
 
