@@ -533,7 +533,7 @@ export const adminMarksController = {
           user_id: admin_id!,
           action: "BULK_APPROVE_MARKS",
           entity_type: "marks",
-          entity_id: marks_ids[0], 
+          entity_id: marks_ids[0]||0, 
           remarks: `Bulk approved ${marks_ids.length} marks submissions`
         }
       });
@@ -556,7 +556,7 @@ export const adminMarksController = {
           data: {
             user_id: teacherId,
             title: "Marks Approved",
-            message: messages.length === 1 ? messages[0] : `Multiple marks submissions have been approved.`
+            message: messages.length === 1 ? messages[0]as string : `Multiple marks submissions have been approved.`
           }
         })
       );
