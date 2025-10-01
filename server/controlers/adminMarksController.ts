@@ -3,7 +3,6 @@ import prisma from '../db/prisma';
 import { RequestWithUser } from "../middleware/auth";
 
 export const adminMarksController = {
-  // Admin approves marks
   approveMarks: async (
     req: RequestWithUser,
     res: Response,

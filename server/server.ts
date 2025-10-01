@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from "socket.io";
 import AuthRoutes from "./routes/AuthRoutes";
 import UserRoutes from "./routes/UserRoutes";
 import TeachRoutes from "./routes/teacherRoutes";
+import StudentRoutes from "./routes/studentroutes";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use(
 app.use("/api/auth", AuthRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/teacher", TeachRoutes);
+app.use("/api/student", StudentRoutes);
 
 app.get("/", (req: Request, res: Response) => {
   res.send("🚀 Express + Vercel running successfully!");
