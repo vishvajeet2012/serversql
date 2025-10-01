@@ -3,6 +3,7 @@ import { sql } from "../db/inidex";
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from './../db/prisma';
+import { Prisma } from '@prisma/client';
 
 import jwt, { SignOptions } from "jsonwebtoken";
 
@@ -383,7 +384,7 @@ if (assigned_subjects_text && classId) {
         if (roll_number !== undefined) studentData.roll_number = roll_number?.toString().trim();
         if (classId !== undefined) studentData.class_id = classId;
         if (sectionId !== undefined) studentData.section_id = sectionId;
-        if (dob !== undefined) studentData.dob = new Date(dob);
+        studentData.dob = dob ? new Date(dob) : null;
         if (guardian_name !== undefined) studentData.guardian_name = guardian_name;
         if (guardian_mobile_number !== undefined) studentData.guardian_mobile_number = guardian_mobile_number;
         if (student_mobile_number !== undefined) studentData.student_mobile_number = student_mobile_number;
@@ -404,18 +405,23 @@ if (assigned_subjects_text && classId) {
               throw new Error("roll_number is required for creating new student profile");
             }
 
+            const baseData = {
+              student_id: parsedUserId,
+              roll_number: roll_number.toString().trim(),
+              class_id: classId,
+              section_id: sectionId,
+              guardian_name: guardian_name || null,
+              guardian_mobile_number: guardian_mobile_number || null,
+              student_mobile_number: student_mobile_number || null,
+            };
+
+            const studentProfileData: Prisma.student_profileUncheckedCreateInput = {
+              ...baseData,
+              ...(studentData.dob !== null ? { dob: studentData.dob } : {}),
+            };
+
             await tx.student_profile.create({
-              data: {
-                student_id: parsedUserId,
-                roll_number: roll_number.toString().trim(),
-                class_id: classId,
-                section_id: sectionId,
-                dob: dob ? new Date(dob) : null,
-                guardian_name: guardian_name || null,
-                guardian_mobile_number: guardian_mobile_number || null,
-                student_mobile_number: student_mobile_number || null,
-                ...studentData
-              }
+              data: studentProfileData
             });
           }
         }
