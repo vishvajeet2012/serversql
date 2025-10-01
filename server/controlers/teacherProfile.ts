@@ -342,7 +342,176 @@ import { RequestWithUser } from "../middleware/auth";
 
 
 
-export const getTeacherDashboardData = async (req: RequestWithUser, res: Response) => {
+// export const getTeacherDashboardData = async (req: RequestWithUser, res: Response) => {
+//   const teacherId = req.user?.userId;
+
+//   if (!teacherId) {
+//       return res.status(401).json({ error: "Authentication error: User ID not found." });
+//   } 
+
+//   try {
+//       const teacherAssignments = await prisma.section_teachers.findMany({
+//           where: {
+//               teacher_id: teacherId,
+//           },
+//           include: {
+//               section: {
+//                   include: {
+//                       Renamedclass: {
+//                           include: {
+//                               subject: true,
+//                           }
+//                       },
+//                       student_profile: {
+//                           include: {
+//                               users: {
+//                                   select: {
+//                                       name: true,
+//                                       email: true,
+//                                       profile_picture: true,
+//                                   }
+//                               }
+//                           }
+//                       },
+//                       // Include tests for each section
+//                       test: {
+//                           include: {
+//                               subject: {
+//                                   select: {
+//                                       subject_name: true,
+//                                   }
+//                               },
+//                               teacher_profile: {
+//                                   include: {
+//                                       users: {
+//                                           select: {
+//                                               name: true,
+//                                               email: true,
+//                                           }
+//                                       }
+//                                   }
+//                               },
+//                               marks: {
+//                                   include: {
+//                                       student_profile: {
+//                                           select: {
+//                                               student_id: true,
+//                                               roll_number: true,
+//                                               users: {
+//                                                   select: {
+//                                                       name: true,
+//                                                   }
+//                                               }
+//                                           }
+//                                       }
+//                                   }
+//                               }
+//                           }
+//                       }
+//                   }
+//               }
+//           }
+//       });
+      
+//       // Transform the data into a more frontend-friendly structure
+//       const classDataMap = new Map();
+
+//       for (const assignment of teacherAssignments) {
+//           const section = assignment.section;
+//           const classInfo = section.Renamedclass;
+
+//           // If we haven't seen this class yet, initialize it
+//           if (!classDataMap.has(classInfo.class_id)) {
+//               classDataMap.set(classInfo.class_id, {
+//                   classId: classInfo.class_id,
+//                   className: classInfo.class_name,
+//                   description: classInfo.description,
+//                   subjects: classInfo.subject.map(s => ({
+//                       subjectId: s.subject_id,
+//                       subjectName: s.subject_name
+//                   })),
+//                   sections: [],
+//               });
+//           }
+
+//           // Get the class from the map and add the current section to it
+//           const currentClass = classDataMap.get(classInfo.class_id);
+          
+//           // Transform tests data
+//           const transformedTests = section.test.map(test => ({
+//               testId: test.test_id,
+//               testName: test.test_name,
+//               subjectName: test.subject.subject_name,
+//               dateConducted: test.date_conducted,
+//               maxMarks: test.max_marks,
+//               testRank: test.test_rank,
+//               createdBy: {
+//                   teacherId: test.created_by,
+//                   teacherName: test.teacher_profile.users.name,
+//                   teacherEmail: test.teacher_profile.users.email,
+//               },
+//               studentMarks: test.marks.map(mark => ({
+//                   marksId: mark.marks_id,
+//                   studentId: mark.student_profile.student_id,
+//                   studentName: mark.student_profile.users.name,
+//                   rollNumber: mark.student_profile.roll_number,
+//                   marksObtained: mark.marks_obtained,
+//                   status: mark.status,
+//                   approvedBy: mark.approved_by,
+//                   approvedAt: mark.approved_at,
+//               })),
+//               totalStudents: test.marks.length,
+//               averageMarks: test.marks.length > 0 
+//                   ? (test.marks.reduce((sum, m) => sum + m.marks_obtained, 0) / test.marks.length).toFixed(2)
+//                   : 0,
+//           }));
+
+//           currentClass.sections.push({
+//               sectionId: section.section_id,
+//               sectionName: section.section_name,
+//               isClassTeacher: section.class_teacher_id === teacherId,
+//               studentCount: section.student_profile.length,
+//               students: section.student_profile.map(sp => ({
+//                   studentId: sp.student_id,
+//                   name: sp.users.name,
+//                   email: sp.users.email,
+//                   rollNumber: sp.roll_number,
+//                   profilePicture: sp.users.profile_picture
+//               })),
+//               tests: transformedTests,
+//               totalTests: transformedTests.length,
+//           });
+//       }
+      
+//       // Convert the map values to an array for the final response
+//       const assignedClasses = Array.from(classDataMap.values());
+
+//       // Fetch teacher's own details
+//       const teacherDetails = await prisma.users.findUnique({
+//           where: { user_id: teacherId },
+//           select: {
+//               user_id: true,
+//               name: true,
+//               email: true,
+//               profile_picture: true
+//           }
+//       });
+
+//       res.status(200).json({
+//           teacherDetails,
+//           assignedClasses,
+//       });
+
+//   } catch (error) {
+//       console.error("Error fetching teacher dashboard data:", error);
+//       res.status(500).json({ error: "An internal server error occurred." });
+//   }
+// };
+
+
+
+
+export const getTeacherDashboardData = async (req: RequestWithUser, res: Response): Promise<Response> => {
   const teacherId = req.user?.userId;
 
   if (!teacherId) {
@@ -373,7 +542,6 @@ export const getTeacherDashboardData = async (req: RequestWithUser, res: Respons
                               }
                           }
                       },
-                      // Include tests for each section
                       test: {
                           include: {
                               subject: {
@@ -413,14 +581,12 @@ export const getTeacherDashboardData = async (req: RequestWithUser, res: Respons
           }
       });
       
-      // Transform the data into a more frontend-friendly structure
       const classDataMap = new Map();
 
       for (const assignment of teacherAssignments) {
           const section = assignment.section;
           const classInfo = section.Renamedclass;
 
-          // If we haven't seen this class yet, initialize it
           if (!classDataMap.has(classInfo.class_id)) {
               classDataMap.set(classInfo.class_id, {
                   classId: classInfo.class_id,
@@ -434,10 +600,8 @@ export const getTeacherDashboardData = async (req: RequestWithUser, res: Respons
               });
           }
 
-          // Get the class from the map and add the current section to it
           const currentClass = classDataMap.get(classInfo.class_id);
           
-          // Transform tests data
           const transformedTests = section.test.map(test => ({
               testId: test.test_id,
               testName: test.test_name,
@@ -483,10 +647,8 @@ export const getTeacherDashboardData = async (req: RequestWithUser, res: Respons
           });
       }
       
-      // Convert the map values to an array for the final response
       const assignedClasses = Array.from(classDataMap.values());
 
-      // Fetch teacher's own details
       const teacherDetails = await prisma.users.findUnique({
           where: { user_id: teacherId },
           select: {
@@ -497,13 +659,14 @@ export const getTeacherDashboardData = async (req: RequestWithUser, res: Respons
           }
       });
 
-      res.status(200).json({
+      // Add 'return' here
+      return res.status(200).json({
           teacherDetails,
           assignedClasses,
       });
 
   } catch (error) {
       console.error("Error fetching teacher dashboard data:", error);
-      res.status(500).json({ error: "An internal server error occurred." });
+      return res.status(500).json({ error: "An internal server error occurred." });
   }
 };
