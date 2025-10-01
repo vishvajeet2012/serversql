@@ -237,7 +237,7 @@ export const createClass = async (req: Request, res: Response): Promise<Response
         await tx.teacher_profile.upsert({
           where: { teacher_id: class_teacher_id },
           update: {},
-          create: { teacher_id: class_teacher_id, assigned_subjects: null, class_assignments: null },
+          create: { teacher_id: class_teacher_id, assigned_subjects:  Prisma.JsonNull, class_assignments:  Prisma.JsonNull },
         });
         teacherIdToAssign = class_teacher_id;
       }
