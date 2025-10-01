@@ -4,7 +4,7 @@
   "description": "Express server with TypeScript and Neon database",
   "main": "server/dist/server.js",
   "scripts": {
-    "start": "node server/dist/server.js",
+    "start": "ts-node server/server.ts",
     "build": "cd server && tsc && prisma generate",
     "dev": "cd server && ts-node-dev --respawn --transpile-only server.ts",
     "postinstall": "cd server && prisma generate",
