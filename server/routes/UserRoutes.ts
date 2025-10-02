@@ -49,7 +49,7 @@ userRouter.post("/bulkApproveMarks", authenticate, authenticateJWT, adminMarksCo
 
 
 ///////////////admin dashbord////////////////////////
-userRouter.get("/getadminanalytics", getAdminAnalytics);
+userRouter.get("/getadminanalytics", authenticate ,authenticateJWT ,getAdminAnalytics);
 
 
 
