@@ -8,6 +8,7 @@ import { getSectionDetails, SectionTeachersController} from "../controlers/Secti
 import {getTotals } from "../controlers/overVIewControler"
 import { adminMarksController } from "../controlers/adminMarksController";
 import { authenticateJWT as authenticate } from "../middleware/auth";
+import  {getAdminAnalytics} from "../controlers/admindashbord"
 
 import express, { Request, Response } from "express";
 const userRouter = express.Router();
@@ -47,7 +48,8 @@ userRouter.post("/bulkApproveMarks", authenticate, authenticateJWT, adminMarksCo
 
 
 
-
+///////////////admin dashbord////////////////////////
+userRouter.get("/getadminanalytics", getAdminAnalytics);
 
 
 
