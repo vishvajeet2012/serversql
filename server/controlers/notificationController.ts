@@ -50,7 +50,6 @@ export const getUserNotifications = async (
   }
 };
 
-// Mark notification as read
 export const markNotificationAsRead = async (
   req: RequestWithUser,
   res: Response,
@@ -89,7 +88,6 @@ export const markNotificationAsRead = async (
   }
 };
 
-// Mark all notifications as read
 export const markAllNotificationsAsRead = async (
   req: RequestWithUser,
   res: Response,
@@ -123,7 +121,6 @@ export const markAllNotificationsAsRead = async (
   }
 };
 
-// Delete notification
 export const deleteNotification = async (
   req: RequestWithUser,
   res: Response,

@@ -7,7 +7,6 @@ export const checkUpcomingTests = async (io: any) => {
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
 
-    // Get tests in 3 days
     const threeDaysLater = new Date(currentDate);
     threeDaysLater.setDate(threeDaysLater.getDate() + 3);
     threeDaysLater.setHours(23, 59, 59, 999);
