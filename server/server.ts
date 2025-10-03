@@ -160,15 +160,15 @@ io.on("connection", (socket) => {
   });
 });
 
-// // Cron job: Check for upcoming tests (runs daily at 8 AM)
-// cron.schedule("0 8 * * *", () => {
-//   console.log("Running scheduled job: Check upcoming tests");
-//   checkUpcomingTests(io);
-// });
-cron.schedule("* * * * *", () => {
-  console.log("Running scheduled job every 1 minute");
+// Cron job: Check for upcoming tests (runs daily at 8 AM)
+cron.schedule("0 8 * * *", () => {
+  console.log("Running scheduled job: Check upcoming tests");
   checkUpcomingTests(io);
 });
+// cron.schedule("* * * * *", () => {
+//   console.log("Running scheduled job every 1 minute");
+//   checkUpcomingTests(io);
+// });
 
 export { io };
 
