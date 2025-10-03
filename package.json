@@ -5,7 +5,7 @@
   "main": "server/dist/server.js",
   "scripts": {
     "start": "node server/dist/server.js",
-    "build": "cd server && tsc && prisma generate",
+    "build": "cd server && prisma generate && tsc",
     "dev": "cd server && ts-node-dev --respawn --transpile-only server.ts",
     "postinstall": "npm run build",
     "migrate:deploy": "cd server && prisma migrate deploy",
