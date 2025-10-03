@@ -7,7 +7,7 @@
     "start": "node server/dist/server.js",
     "build": "cd server && tsc && prisma generate",
     "dev": "cd server && ts-node-dev --respawn --transpile-only server.ts",
-    "postinstall": "cd server && prisma generate",
+    "postinstall": "npm run build",
     "migrate:deploy": "cd server && prisma migrate deploy",
     "dev:nodemon": "cd server && nodemon --exec ts-node server.ts",
     "dev:ts-node": "cd server && ts-node server.ts",
