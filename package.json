@@ -1,3 +1,5 @@
+{
+  "name": "serversql",
   "version": "1.0.0",
   "description": "Express server with TypeScript and Neon database",
   "main": "server/dist/server.js",
@@ -16,7 +18,6 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/client": "^6.16.1",
-
     "@types/socket.io": "^3.0.1",
     "argon2": "^0.44.0",
     "bcryptjs": "^3.0.2",
