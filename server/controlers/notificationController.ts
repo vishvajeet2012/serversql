@@ -1,3 +1,4 @@
+// controllers/notificationController.ts - NO CHANGES NEEDED
 import { Response, NextFunction } from "express";
 import { RequestWithUser } from "../middleware/auth";
 import prisma from "../db/prisma";
@@ -27,7 +28,7 @@ export const getUserNotifications = async (
       orderBy: {
         created_at: "desc",
       },
-      take: 50, // Limit to last 50 notifications
+      take: 50,
     });
 
     const unreadCount = await prisma.notifications.count({
@@ -65,7 +66,7 @@ export const markNotificationAsRead = async (
     }
 
     const notification = await prisma.notifications.findUnique({
-      where: { notification_id: parseInt(notification_id ??"0") },
+      where: { notification_id: parseInt(notification_id??"0") },
     });
 
     if (!notification || notification.user_id !== userId) {
@@ -74,7 +75,7 @@ export const markNotificationAsRead = async (
     }
 
     await prisma.notifications.update({
-      where: { notification_id: parseInt(notification_id ??"0") },
+      where: { notification_id: parseInt(notification_id??"0") },
       data: { is_read: true },
     });
 
@@ -136,7 +137,7 @@ export const deleteNotification = async (
     }
 
     const notification = await prisma.notifications.findUnique({
-      where: { notification_id: parseInt(notification_id ?? "0") },
+      where: { notification_id: parseInt(notification_id?? "0") },
     });
 
     if (!notification || notification.user_id !== userId) {
@@ -145,7 +146,7 @@ export const deleteNotification = async (
     }
 
     await prisma.notifications.delete({
-      where: { notification_id:parseInt(notification_id ?? "0") },
+      where: { notification_id: parseInt(notification_id?? "0") },
     });
 
     res.status(200).json({

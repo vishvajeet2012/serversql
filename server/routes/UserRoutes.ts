@@ -11,6 +11,7 @@ import { authenticateJWT as authenticate } from "../middleware/auth";
 import  {getAdminAnalytics} from "../controlers/admindashbord"
 
 import express, { Request, Response } from "express";
+import { removePushToken, savePushToken } from "../controlers/pushnotificaiton";
 const userRouter = express.Router();
 
 
@@ -46,7 +47,8 @@ userRouter.get("/getPendingMarks", adminMarksController.getPendingMarks);
 userRouter.post("/bulkApproveMarks", authenticate, authenticateJWT, adminMarksController.bulkApproveMarks);
 
 
-
+userRouter.post("/save-push-token", authenticateJWT, savePushToken);
+userRouter.delete("/remove-push-token", authenticateJWT, removePushToken);
 
 ///////////////admin dashbord////////////////////////
 userRouter.get("/getadminanalytics", authenticate  ,getAdminAnalytics);
