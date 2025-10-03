@@ -58,7 +58,7 @@ export const markNotificationAsRead = async (
 ): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { notification_id } = req.params;
+    const { notification_id } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
@@ -129,7 +129,7 @@ export const deleteNotification = async (
 ): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { notification_id } = req.params;
+    const { notification_id } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
