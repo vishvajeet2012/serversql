@@ -4,7 +4,7 @@
   "description": "Express server with TypeScript and Neon database",
   "main": "dist/server.js",
   "scripts": {
-    "start": "ts-node server.ts",
+    "start": "node dist/server.js",
     "build": "tsc && prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only server.ts",
     "postinstall": "prisma generate",
@@ -18,6 +18,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/client": "^6.16.1",
+    "@types/node-cron": "^3.0.11",
     "@types/socket.io": "^3.0.1",
     "argon2": "^0.44.0",
     "bcryptjs": "^3.0.2",
@@ -27,7 +28,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/argon2": "^0.14.1",
@@ -36,10 +38,8 @@
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.3.1",
-    "@types/node-cron": "^3.0.11",
     "nodemon": "^3.1.10",
     "prisma": "^6.16.1",
-    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }
