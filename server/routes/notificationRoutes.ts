@@ -13,6 +13,6 @@ const router = express.Router();
 router.get("/getallnotification", authenticateJWT, getUserNotifications);
 router.post("/notification_id/read", authenticateJWT, markNotificationAsRead);
 router.put("/read-all", authenticateJWT, markAllNotificationsAsRead);
-router.delete("/notification_id", authenticateJWT, deleteNotification);
+router.post("/notification_id", authenticateJWT, deleteNotification);
 
 export default router;
