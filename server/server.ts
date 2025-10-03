@@ -143,7 +143,6 @@ io.on("connection", (socket) => {
   // Join role-specific room
   socket.join(`role_${user.role}`);
 
-  // Handle disconnect
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${user.email}`);
   });
@@ -171,7 +170,6 @@ cron.schedule("* * * * *", () => {
   checkUpcomingTests(io);
 });
 
-// Make io accessible globally
 export { io };
 
 const port = 5000;
