@@ -166,8 +166,8 @@ io.on("connection", (socket) => {
 //   console.log("Running scheduled job: Check upcoming tests");
 //   checkUpcomingTests(io);
 // });
-cron.schedule("52 15 * * *", () => {
-  console.log("Running scheduled job: Check upcoming tests at 3:52 PM");
+cron.schedule("* * * * *", () => {
+  console.log("Running scheduled job every 1 minute");
   checkUpcomingTests(io);
 });
 
