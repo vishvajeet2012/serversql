@@ -5,10 +5,9 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding existing feedback with creator info...');
 
-  // Get all feedback records without created_by
   const feedbacks = await prisma.feedback.findMany({
     where: {
-      created_by: undefined, // Or however you identify old records
+      created_by: undefined, 
     },
     include: {
       teacher_profile: true,
@@ -16,12 +15,11 @@ async function main() {
   });
 
   for (const feedback of feedbacks) {
-    // Set created_by to teacher_id by default for old records
     await prisma.feedback.update({
       where: { feedback_id: feedback.feedback_id },
       data: {
         created_by: feedback.teacher_id,
-        sender_role: 'Teacher', // Assume old feedbacks were from teachers
+        sender_role: 'Teacher',
       },
     });
   }

@@ -9,6 +9,7 @@ import {getTotals } from "../controlers/overVIewControler"
 import { adminMarksController } from "../controlers/adminMarksController";
 import { authenticateJWT as authenticate } from "../middleware/auth";
 import  {getAdminAnalytics} from "../controlers/admindashbord"
+import { feedbackController } from "../controlers/feedbackControelr";
 
 import express, { Request, Response } from "express";
 import { removePushToken, savePushToken } from "../controlers/pushnotificaiton";
@@ -54,6 +55,29 @@ userRouter.delete("/remove-push-token", authenticateJWT, removePushToken);
 userRouter.get("/getadminanalytics", authenticate  ,getAdminAnalytics);
 
 
+////////////////////feedback apis  ////////////////
+
+// Admin creates optional manual feedback after marks approval
+
+userRouter.post("/admin/create", authenticateJWT, feedbackController.createAdminFeedback);
+// Teacher creates manual feedback after marks are approved
+
+userRouter.post("/teacher/create", authenticateJWT, feedbackController.createTeacherFeedback);
+// Teacher edits auto-generated or own manual feedback anytime
+
+userRouter.post("/edit/feedback_id", authenticateJWT, feedbackController.editFeedback);
+// Student replies to any feedback (auto/manual)
+
+userRouter.post("/reply", authenticateJWT, feedbackController.replyToFeedback);
+// Get complete feedback thread for specific test + student (conversation view)
+
+userRouter.post("/thread/test_id/student_id", authenticateJWT, feedbackController.getFeedbackThread);
+// Student gets all their feedback across all tests
+
+userRouter.get("/my-feedback", authenticateJWT, feedbackController.getMyFeedback);
+// Teacher gets all auto-generated feedbacks to review and edit
+
+userRouter.get("/teacher/review", authenticateJWT, feedbackController.getTeacherReviewFeedback);
 
 
 

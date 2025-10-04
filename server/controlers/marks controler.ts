@@ -1,8 +1,8 @@
+// controllers/marksController.ts
 import { Response, NextFunction } from "express";
 import prisma from '../db/prisma';
 import { RequestWithUser } from "../middleware/auth";
-
-
+import { createAutoFeedback } from "../util/autoFeedbackHelper";
 
 interface UpdateMarksRequest {
   test_id: number;
@@ -28,7 +28,6 @@ interface SuccessResult {
 }
 
 export const marksController = {
-  // Teacher updates student marks for tests they created
   updateStudentMarks: async (
     req: RequestWithUser,
     res: Response,
@@ -43,7 +42,6 @@ export const marksController = {
         return;
       }
 
-      // Validate required fields
       if (!test_id || !student_id || marks_obtained === undefined) {
         res.status(400).json({ 
           error: "Missing required fields: test_id, student_id, marks_obtained" 
@@ -51,7 +49,6 @@ export const marksController = {
         return;
       }
 
-      // Verify the test exists and was created by this teacher
       const test = await prisma.test.findFirst({
         where: {
           test_id: test_id,
@@ -71,7 +68,6 @@ export const marksController = {
         return;
       }
 
-      // Verify student exists and belongs to the test's class and section
       const student = await prisma.student_profile.findFirst({
         where: {
           student_id: student_id,
@@ -87,7 +83,6 @@ export const marksController = {
         return;
       }
 
-      // Validate marks are within range
       if (marks_obtained < 0 || marks_obtained > test.max_marks) {
         res.status(400).json({ 
           error: `Marks must be between 0 and ${test.max_marks}` 
@@ -95,7 +90,6 @@ export const marksController = {
         return;
       }
 
-      // Check if marks record already exists
       const existingMarks = await prisma.marks.findFirst({
         where: {
           test_id: test_id,
@@ -106,7 +100,6 @@ export const marksController = {
       let updatedMarks;
       
       if (existingMarks) {
-        // Update existing marks record
         updatedMarks = await prisma.marks.update({
           where: {
             marks_id: existingMarks.marks_id
@@ -138,8 +131,16 @@ export const marksController = {
             }
           }
         });
+
+        // Delete old auto-feedback
+        await prisma.feedback.deleteMany({
+          where: {
+            test_id: test_id,
+            student_id: student_id,
+            sender_role: "System"
+          }
+        });
       } else {
-        // Create new marks record
         updatedMarks = await prisma.marks.create({
           data: {
             test_id: test_id,
@@ -169,7 +170,15 @@ export const marksController = {
         });
       }
 
-      // Create audit log entry
+      // 🔥 Create auto-feedback silently
+      createAutoFeedback(
+        test_id,
+        student_id,
+        teacher_id,
+        marks_obtained,
+        test.max_marks
+      ).catch(err => console.error("Auto-feedback failed:", err));
+
       await prisma.audit_log.create({
         data: {
           user_id: teacher_id!,
@@ -180,7 +189,6 @@ export const marksController = {
         }
       });
 
-      // Create notification for admin
       const admins = await prisma.users.findMany({
         where: {
           role: "Admin",
@@ -222,7 +230,6 @@ export const marksController = {
     }
   },
 
-  // Get marks for tests created by the teacher
   getMyTestMarks: async (
     req: RequestWithUser,
     res: Response
@@ -324,7 +331,6 @@ export const marksController = {
     }
   },
 
-  // Bulk update marks for multiple students
   bulkUpdateMarks: async (
     req: RequestWithUser,
     res: Response
@@ -348,7 +354,6 @@ export const marksController = {
         return;
       }
 
-      // Verify the test exists and was created by this teacher
       const test = await prisma.test.findFirst({
         where: {
           test_id: test_id,
@@ -363,14 +368,13 @@ export const marksController = {
         return;
       }
 
-      const results: SuccessResult[] = []; // Explicitly typed array
-      const errors: ErrorResult[] = []; // Explicitly typed array
+      const results: SuccessResult[] = [];
+      const errors: ErrorResult[] = [];
 
       for (const markData of marks_data) {
         try {
           const { student_id, marks_obtained } = markData;
 
-          // Validate marks range
           if (marks_obtained < 0 || marks_obtained > test.max_marks) {
             errors.push({
               student_id,
@@ -379,7 +383,6 @@ export const marksController = {
             continue;
           }
 
-          // Use findFirst and then upsert logic since composite unique constraint might not exist
           const existingMark = await prisma.marks.findFirst({
             where: {
               test_id: test_id,
@@ -390,7 +393,6 @@ export const marksController = {
           let updatedMarks;
 
           if (existingMark) {
-            // Update existing record
             updatedMarks = await prisma.marks.update({
               where: {
                 marks_id: existingMark.marks_id
@@ -403,8 +405,15 @@ export const marksController = {
                 updated_at: new Date()
               }
             });
+
+            await prisma.feedback.deleteMany({
+              where: {
+                test_id: test_id,
+                student_id: student_id,
+                sender_role: "System"
+              }
+            });
           } else {
-            // Create new record
             updatedMarks = await prisma.marks.create({
               data: {
                 test_id: test_id,
@@ -414,6 +423,15 @@ export const marksController = {
               }
             });
           }
+
+          // Auto-feedback for each
+          createAutoFeedback(
+            test_id,
+            student_id,
+            teacher_id,
+            marks_obtained,
+            test.max_marks
+          ).catch(err => console.error(`Auto-feedback failed for student ${student_id}:`, err));
 
           results.push({
             student_id,
@@ -430,7 +448,6 @@ export const marksController = {
         }
       }
 
-      // Create audit log for bulk operation
       await prisma.audit_log.create({
         data: {
           user_id: teacher_id!,
@@ -456,4 +473,4 @@ export const marksController = {
       });
     }
   }
-}
+};

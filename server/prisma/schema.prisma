@@ -42,7 +42,10 @@ model feedback {
   message         String
   created_at      DateTime?       @default(now()) @db.Timestamp(6)
   updated_at      DateTime?       @default(now()) @db.Timestamp(6)
-  created_by      Int
+  created_by   Int       // scalar foreign key
+
+  creator    users     @relation("UserFeedbacks", fields: [created_by], references: [user_id])
+
   sender_role     String          @db.VarChar(20)
   student_profile student_profile @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction)
   teacher_profile teacher_profile @relation(fields: [teacher_id], references: [teacher_id], onDelete: Cascade, onUpdate: NoAction)
@@ -178,8 +181,11 @@ model users {
   student_profile student_profile?
   teacher_profile teacher_profile?
 
+
+  feedbacks        feedback[] @relation("UserFeedbacks")  // Changed from Feedback[] to feedback[]
   @@index([email], map: "idx_users_email")
   @@index([mobile_number], map: "idx_users_mobile")
   @@index([role], map: "idx_users_role")
+  
   @@index([status], map: "idx_users_status")
 }
