@@ -8,7 +8,7 @@ async function main() {
   // Get all feedback records without created_by
   const feedbacks = await prisma.feedback.findMany({
     where: {
-      created_by: null, // Or however you identify old records
+      created_by: undefined, // Or however you identify old records
     },
     include: {
       teacher_profile: true,
