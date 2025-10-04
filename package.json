@@ -13,9 +13,14 @@
     "dev:ts-node": "cd server && ts-node server.ts",
     "clean": "rm -rf server/dist",
     "prebuild": "npm run clean",
-    "watch": "cd server && tsc --watch"
+    "watch": "cd server && tsc --watch",
+    "seed": "cd server && ts-node prisma/seed.ts"
+
+    
   },
   "dependencies": {
+ "@types/node-cron": "^3.0.11",
+
     "expo-server-sdk": "^3.10.0",
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/client": "^6.16.1",
@@ -42,5 +47,8 @@
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
