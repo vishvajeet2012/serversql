@@ -9,10 +9,10 @@ import {getTotals } from "../controlers/overVIewControler"
 import { adminMarksController } from "../controlers/adminMarksController";
 import { authenticateJWT as authenticate } from "../middleware/auth";
 import  {getAdminAnalytics} from "../controlers/admindashbord"
-import { feedbackController } from "../controlers/feedbackControelr";
 
 import express, { Request, Response } from "express";
 import { removePushToken, savePushToken } from "../controlers/pushnotificaiton";
+import { feedbackController } from "../controlers/feedbackControelr";
 const userRouter = express.Router();
 
 
@@ -57,27 +57,20 @@ userRouter.get("/getadminanalytics", authenticate  ,getAdminAnalytics);
 
 ////////////////////feedback apis  ////////////////
 
-// Admin creates optional manual feedback after marks approval
+// Universal get test feedbacks (role-based response)
+userRouter.post("/test-feedbacks", authenticate, feedbackController.getTestFeedbacks);
 
-userRouter.post("/admin/create", authenticate, feedbackController.createAdminFeedback);
-// Teacher creates manual feedback after marks are approved
+// Admin/Teacher creates manual feedback after marks approved
+userRouter.post("/create-feedback", authenticate, feedbackController.createFeedback);
 
-userRouter.post("/teacher/create", authenticate, feedbackController.createTeacherFeedback);
-// Teacher edits auto-generated or own manual feedback anytime
+// Admin/Teacher edits feedback (Admin: any, Teacher: System/own)
+userRouter.post("/edit-feedback", authenticate, feedbackController.editFeedback);
 
-userRouter.post("/edit/feedback_id", authenticate, feedbackController.editFeedback);
-// Student replies to any feedback (auto/manual)
+// Student replies to any feedback
+userRouter.post("/reply-feedback", authenticate, feedbackController.replyToFeedback);
 
-userRouter.post("/reply", authenticate, feedbackController.replyToFeedback);
-// Get complete feedback thread for specific test + student (conversation view)
-
-userRouter.post("/thread/test_id/student_id", authenticate, feedbackController.getFeedbackThread);
-// Student gets all their feedback across all tests
-
-userRouter.get("/my-feedback", authenticate, feedbackController.getMyFeedback);
-// Teacher gets all auto-generated feedbacks to review and edit
-
-userRouter.get("/teacher/review", authenticate, feedbackController.getTeacherReviewFeedback);
+// Student gets all their feedbacks across all tests
+userRouter.get("/my-feedbacks", authenticate, feedbackController.getMyAllFeedbacks);
 
 
 
