@@ -13,6 +13,7 @@ import  {getAdminAnalytics} from "../controlers/admindashbord"
 import express, { Request, Response } from "express";
 import { removePushToken, savePushToken } from "../controlers/pushnotificaiton";
 import { feedbackController } from "../controlers/feedbackControelr";
+import { auditLogController } from "../controlers/auditlog";
 const userRouter = express.Router();
 
 
@@ -55,7 +56,13 @@ userRouter.delete("/remove-push-token", authenticateJWT, removePushToken);
 userRouter.get("/getadminanalytics", authenticate  ,getAdminAnalytics);
 
 
-////////////////////feedback apis  ////////////////
+
+
+
+////////////////////feedbaautck apis  ////////////////
+userRouter.get("/auditlogs",authenticate,auditLogController.getAllAuditLogs)
+
+
 
 // Universal get test feedbacks (role-based response)
 userRouter.post("/test-feedbacks", authenticate, feedbackController.getTestFeedbacks);
