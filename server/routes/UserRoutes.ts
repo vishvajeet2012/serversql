@@ -59,25 +59,25 @@ userRouter.get("/getadminanalytics", authenticate  ,getAdminAnalytics);
 
 // Admin creates optional manual feedback after marks approval
 
-userRouter.post("/admin/create", authenticateJWT, feedbackController.createAdminFeedback);
+userRouter.post("/admin/create", authenticate, feedbackController.createAdminFeedback);
 // Teacher creates manual feedback after marks are approved
 
-userRouter.post("/teacher/create", authenticateJWT, feedbackController.createTeacherFeedback);
+userRouter.post("/teacher/create", authenticate, feedbackController.createTeacherFeedback);
 // Teacher edits auto-generated or own manual feedback anytime
 
-userRouter.post("/edit/feedback_id", authenticateJWT, feedbackController.editFeedback);
+userRouter.post("/edit/feedback_id", authenticate, feedbackController.editFeedback);
 // Student replies to any feedback (auto/manual)
 
-userRouter.post("/reply", authenticateJWT, feedbackController.replyToFeedback);
+userRouter.post("/reply", authenticate, feedbackController.replyToFeedback);
 // Get complete feedback thread for specific test + student (conversation view)
 
-userRouter.post("/thread/test_id/student_id", authenticateJWT, feedbackController.getFeedbackThread);
+userRouter.post("/thread/test_id/student_id", authenticate, feedbackController.getFeedbackThread);
 // Student gets all their feedback across all tests
 
-userRouter.get("/my-feedback", authenticateJWT, feedbackController.getMyFeedback);
+userRouter.get("/my-feedback", authenticate, feedbackController.getMyFeedback);
 // Teacher gets all auto-generated feedbacks to review and edit
 
-userRouter.get("/teacher/review", authenticateJWT, feedbackController.getTeacherReviewFeedback);
+userRouter.get("/teacher/review", authenticate, feedbackController.getTeacherReviewFeedback);
 
 
 
