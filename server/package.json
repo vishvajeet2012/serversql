@@ -16,7 +16,6 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "expo-server-sdk": "^3.10.0",
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/client": "^6.16.3",
     "@types/socket.io": "^3.0.1",
@@ -26,6 +25,7 @@
     "dotenv": "^16.4.5",
     "expo-server-sdk": "^4.0.0",
     "express": "^5.1.0",
+    "firebase-admin": "^13.5.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
     "socket.io": "^4.8.1",
