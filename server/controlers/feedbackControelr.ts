@@ -1,8 +1,7 @@
-// controllers/feedbackController.ts
 import { Response } from "express";
 import { RequestWithUser } from "../middleware/auth";
 import prisma from "../db/prisma";
-import { io } from "../server";
+import { sendPushNotification } from "../util/sendNotifcationfireBase";
 
 export const feedbackController = {
   // 1️⃣ Universal Get Test Feedbacks (Role-based)
@@ -114,7 +113,6 @@ export const feedbackController = {
       // TEACHER RESPONSE
       // =====================
       if (userRole === "Teacher") {
-        // Verify teacher owns this test
         if (test.created_by !== userId) {
           res.status(403).json({ error: "Not authorized to view this test" });
           return;
@@ -139,7 +137,6 @@ export const feedbackController = {
           }
         });
 
-        // Get students with feedback only
         const studentsWithFeedback = [];
         for (const mark of approvedMarks) {
           const feedbacks = await prisma.feedback.findMany({
@@ -178,7 +175,6 @@ export const feedbackController = {
           }
         }
 
-        // Sort by roll number
         studentsWithFeedback.sort((a, b) => 
           a.roll_number.localeCompare(b.roll_number, undefined, { numeric: true })
         );
@@ -255,12 +251,10 @@ export const feedbackController = {
           }
         }
 
-        // Sort by roll number
         studentsWithFeedback.sort((a, b) => 
           a.roll_number.localeCompare(b.roll_number, undefined, { numeric: true })
         );
 
-        // Feedback statistics
         const allFeedbacks = await prisma.feedback.findMany({
           where: { test_id: parseInt(test_id) }
         });
@@ -319,7 +313,6 @@ export const feedbackController = {
         return;
       }
 
-      // Check if marks are approved
       const marks = await prisma.marks.findFirst({
         where: {
           test_id: parseInt(test_id),
@@ -341,7 +334,6 @@ export const feedbackController = {
         return;
       }
 
-      // If teacher, verify they own the test
       if (userRole === "Teacher" && marks.test.created_by !== userId) {
         res.status(403).json({ error: "You can only give feedback on your own tests" });
         return;
@@ -365,21 +357,37 @@ export const feedbackController = {
         }
       });
 
-      // Create notification for student
+      // Create notification in database
       await prisma.notifications.create({
         data: {
           user_id: parseInt(student_id),
           title: `💬 New Feedback from ${userRole}`,
-          message: `${feedback.creator.name} gave you feedback on ${marks.test.test_name}`
+          message: `${feedback.creator.name} gave you feedback on ${marks.test.test_name}`,
+          is_read: false,
         }
       });
 
-      // Emit socket notification
-      io.to(`user_${student_id}`).emit("new_notification", {
-        title: `💬 New Feedback from ${userRole}`,
-        type: "feedback_created",
-        feedback_id: feedback.feedback_id
+      // 🔥 FIREBASE FCM: Send push notification to student
+      const student = await prisma.users.findUnique({
+        where: { user_id: parseInt(student_id) },
+        select: { push_token: true }
       });
+
+      if (student?.push_token) {
+        await sendPushNotification({
+          token: student.push_token,
+          title: `💬 New Feedback from ${userRole}`,
+          body: `${feedback.creator.name} gave you feedback on ${marks.test.test_name}`,
+          data: {
+            type: "feedback_created",
+            feedback_id: feedback.feedback_id.toString(),
+            test_id: test_id.toString(),
+            sender_role: userRole,
+          },
+        });
+
+        console.log(`✅ Firebase notification sent to student ${student_id} for new feedback`);
+      }
 
       // Audit log
       await prisma.audit_log.create({
@@ -535,7 +543,6 @@ export const feedbackController = {
       // STUDENT REPLY
       // =====================
       if (userRole === "Student") {
-        // Student can only reply to their own feedback
         if (originalFeedback.student_id !== userId) {
           res.status(403).json({ error: "You can only reply to your own feedback" });
           return;
@@ -559,20 +566,35 @@ export const feedbackController = {
           }
         });
   
-        // Notify original sender
+        // Create notification
         await prisma.notifications.create({
           data: {
             user_id: originalFeedback.created_by,
             title: "💬 Student Replied to Your Feedback",
-            message: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`
+            message: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`,
+            is_read: false,
           }
         });
-  
-        io.to(`user_${originalFeedback.created_by}`).emit("new_notification", {
-          title: "💬 Student Reply",
-          type: "feedback_reply",
-          feedback_id: reply.feedback_id
+
+        // 🔥 FIREBASE FCM: Notify original sender
+        const originalSender = await prisma.users.findUnique({
+          where: { user_id: originalFeedback.created_by },
+          select: { push_token: true }
         });
+
+        if (originalSender?.push_token) {
+          await sendPushNotification({
+            token: originalSender.push_token,
+            title: "💬 Student Reply",
+            body: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`,
+            data: {
+              type: "feedback_reply",
+              feedback_id: reply.feedback_id.toString(),
+              original_feedback_id: feedback_id.toString(),
+              test_id: originalFeedback.test_id.toString(),
+            },
+          });
+        }
   
         // Audit log
         await prisma.audit_log.create({
@@ -597,7 +619,6 @@ export const feedbackController = {
       // TEACHER REPLY
       // =====================
       if (userRole === "Teacher") {
-        // Teacher can reply to feedbacks on their own tests
         if (originalFeedback.test.created_by !== userId) {
           res.status(403).json({ error: "You can only reply to feedbacks on your own tests" });
           return;
@@ -621,36 +642,62 @@ export const feedbackController = {
           }
         });
   
-        // Notify student (always)
+        // Notify student
         await prisma.notifications.create({
           data: {
             user_id: originalFeedback.student_id,
             title: "💬 Teacher Replied to Feedback",
-            message: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`
+            message: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`,
+            is_read: false,
           }
         });
-  
-        io.to(`user_${originalFeedback.student_id}`).emit("new_notification", {
-          title: "💬 Teacher Reply",
-          type: "feedback_reply",
-          feedback_id: reply.feedback_id
+
+        // 🔥 FIREBASE FCM: Notify student
+        const student = await prisma.users.findUnique({
+          where: { user_id: originalFeedback.student_id },
+          select: { push_token: true }
         });
+
+        if (student?.push_token) {
+          await sendPushNotification({
+            token: student.push_token,
+            title: "💬 Teacher Reply",
+            body: `${reply.creator.name} replied to your feedback on ${originalFeedback.test.test_name}`,
+            data: {
+              type: "feedback_reply",
+              feedback_id: reply.feedback_id.toString(),
+              test_id: originalFeedback.test_id.toString(),
+            },
+          });
+        }
   
-        // If replying to student's reply, notify the student
+        // If replying to student's reply, notify the student again
         if (originalFeedback.sender_role === "Student" && originalFeedback.created_by !== userId) {
           await prisma.notifications.create({
             data: {
               user_id: originalFeedback.created_by,
               title: "💬 Teacher Responded",
-              message: `${reply.creator.name} responded to your reply`
+              message: `${reply.creator.name} responded to your reply`,
+              is_read: false,
             }
           });
-  
-          io.to(`user_${originalFeedback.created_by}`).emit("new_notification", {
-            title: "💬 Teacher Response",
-            type: "feedback_reply",
-            feedback_id: reply.feedback_id
+
+          const replyingStudent = await prisma.users.findUnique({
+            where: { user_id: originalFeedback.created_by },
+            select: { push_token: true }
           });
+
+          if (replyingStudent?.push_token) {
+            await sendPushNotification({
+              token: replyingStudent.push_token,
+              title: "💬 Teacher Response",
+              body: `${reply.creator.name} responded to your reply`,
+              data: {
+                type: "feedback_reply",
+                feedback_id: reply.feedback_id.toString(),
+              },
+            });
+          }
         }
   
         // Audit log
@@ -676,7 +723,6 @@ export const feedbackController = {
       // ADMIN REPLY
       // =====================
       if (userRole === "Admin") {
-        // Admin can reply to any feedback
         const reply = await prisma.feedback.create({
           data: {
             teacher_id: originalFeedback.teacher_id,
@@ -700,30 +746,56 @@ export const feedbackController = {
           data: {
             user_id: originalFeedback.student_id,
             title: "👔 Admin Replied to Feedback",
-            message: `Admin replied to feedback on ${originalFeedback.test.test_name}`
+            message: `Admin replied to feedback on ${originalFeedback.test.test_name}`,
+            is_read: false,
           }
         });
-  
-        io.to(`user_${originalFeedback.student_id}`).emit("new_notification", {
-          title: "👔 Admin Reply",
-          type: "feedback_reply",
-          feedback_id: reply.feedback_id
+
+        // 🔥 FIREBASE FCM: Notify student
+        const student = await prisma.users.findUnique({
+          where: { user_id: originalFeedback.student_id },
+          select: { push_token: true }
         });
+
+        if (student?.push_token) {
+          await sendPushNotification({
+            token: student.push_token,
+            title: "👔 Admin Reply",
+            body: `Admin replied to feedback on ${originalFeedback.test.test_name}`,
+            data: {
+              type: "feedback_reply",
+              feedback_id: reply.feedback_id.toString(),
+              sender_role: "Admin",
+            },
+          });
+        }
   
         // Notify teacher
         await prisma.notifications.create({
           data: {
             user_id: originalFeedback.test.created_by,
             title: "👔 Admin Replied to Feedback",
-            message: `Admin replied to feedback on ${originalFeedback.test.test_name}`
+            message: `Admin replied to feedback on ${originalFeedback.test.test_name}`,
+            is_read: false,
           }
         });
-  
-        io.to(`user_${originalFeedback.test.created_by}`).emit("new_notification", {
-          title: "👔 Admin Reply",
-          type: "feedback_reply",
-          feedback_id: reply.feedback_id
+
+        const teacher = await prisma.users.findUnique({
+          where: { user_id: originalFeedback.test.created_by },
+          select: { push_token: true }
         });
+
+        if (teacher?.push_token) {
+          await sendPushNotification({
+            token: teacher.push_token,
+            title: "👔 Admin Reply",
+            body: `Admin replied to feedback on ${originalFeedback.test.test_name}`,
+            data: {
+              type: "feedback_reply",
+              feedback_id: reply.feedback_id.toString(),
+            },
+          });
+        }
   
         // If replying to someone else's feedback, notify them too
         if (originalFeedback.created_by !== userId) {
@@ -731,15 +803,27 @@ export const feedbackController = {
             data: {
               user_id: originalFeedback.created_by,
               title: "👔 Admin Responded",
-              message: `Admin responded to your feedback`
+              message: `Admin responded to your feedback`,
+              is_read: false,
             }
           });
-  
-          io.to(`user_${originalFeedback.created_by}`).emit("new_notification", {
-            title: "👔 Admin Response",
-            type: "feedback_reply",
-            feedback_id: reply.feedback_id
+
+          const originalCreator = await prisma.users.findUnique({
+            where: { user_id: originalFeedback.created_by },
+            select: { push_token: true }
           });
+
+          if (originalCreator?.push_token) {
+            await sendPushNotification({
+              token: originalCreator.push_token,
+              title: "👔 Admin Response",
+              body: `Admin responded to your feedback`,
+              data: {
+                type: "feedback_reply",
+                feedback_id: reply.feedback_id.toString(),
+              },
+            });
+          }
         }
   
         // Audit log
@@ -768,348 +852,344 @@ export const feedbackController = {
     }
   },
 
- // 5️⃣ Get All Feedbacks (Universal - Role-based)
-getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.userId;
-    const userRole = req.user?.role;
-console.log(userRole,"role hai bhai")
-    if (!userId || !userRole) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
+  // 5️⃣ Get All Feedbacks (Universal - Role-based)
+  getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+      console.log(userRole, "role hai bhai");
 
-    // =====================
-    // STUDENT RESPONSE
-    // =====================
-    if (userRole === "Student") {
-      const approvedMarks = await prisma.marks.findMany({
-        where: {
-          student_id: userId,
-          status: "Approved"
-        },
-        include: {
-          test: {
-            select: {
-              test_id: true,
-              test_name: true,
-              max_marks: true,
-              date_conducted: true,
-              subject: {
-                select: {
-                  subject_name: true
-                }
-              },
-              teacher_profile: {
-                include: {
-                  users: {
-                    select: {
-                      name: true
+      if (!userId || !userRole) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // =====================
+      // STUDENT RESPONSE
+      // =====================
+      if (userRole === "Student") {
+        const approvedMarks = await prisma.marks.findMany({
+          where: {
+            student_id: userId,
+            status: "Approved"
+          },
+          include: {
+            test: {
+              select: {
+                test_id: true,
+                test_name: true,
+                max_marks: true,
+                date_conducted: true,
+                subject: {
+                  select: {
+                    subject_name: true
+                  }
+                },
+                teacher_profile: {
+                  include: {
+                    users: {
+                      select: {
+                        name: true
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-      });
-
-      const allFeedbacks = [];
-
-      for (const mark of approvedMarks) {
-        const feedbacks = await prisma.feedback.findMany({
-          where: {
-            test_id: mark.test_id,
-            student_id: userId
-          },
-          include: {
-            creator: {
-              select: {
-                name: true,
-                profile_picture: true
-              }
-            }
-          },
-          orderBy: { created_at: "desc" }
         });
 
-        if (feedbacks.length > 0) {
-          const percentage = (mark.marks_obtained / mark.test.max_marks) * 100;
-          
-          allFeedbacks.push({
-            test_id: mark.test_id,
-            test_name: mark.test.test_name,
-            subject_name: mark.test.subject.subject_name,
-            teacher_name: mark.test.teacher_profile.users.name,
-            date_conducted: mark.test.date_conducted.toISOString().split('T')[0],
-            marks_obtained: mark.marks_obtained,
-            max_marks: mark.test.max_marks,
-            percentage: parseFloat(percentage.toFixed(2)),
-            feedbacks: feedbacks.map(fb => ({
-              feedback_id: fb.feedback_id,
-              sender_role: fb.sender_role,
-              sender_name: fb.creator.name,
-              message: fb.message,
-              created_at: fb.created_at,
-              is_my_reply: fb.sender_role === "Student"
-            })),
-            total_feedbacks: feedbacks.length
-          });
-        }
-      }
+        const allFeedbacks = [];
 
-      res.status(200).json({
-        success: true,
-        role: "Student",
-        data: allFeedbacks,
-        total_tests_with_feedback: allFeedbacks.length
-      });
-      return;
-    }
-
-    // =====================
-    // TEACHER RESPONSE
-    // =====================
-    if (userRole === "Teacher") {
-      // Get all tests created by teacher
-      const teacherTests = await prisma.test.findMany({
-        where: {
-          created_by: userId
-        },
-        select: {
-          test_id: true,
-          test_name: true,
-          max_marks: true,
-          date_conducted: true,
-          subject: {
-            select: {
-              subject_name: true
-            }
-          },
-          Renamedclass: {
-            select: {
-              class_name: true
-            }
-          },
-          section: {
-            select: {
-              section_name: true
-            }
-          }
-        }
-      });
-
-      const allFeedbacks = [];
-
-      for (const test of teacherTests) {
-        // Get all feedbacks for this test
-        const feedbacks = await prisma.feedback.findMany({
-          where: {
-            test_id: test.test_id
-          },
-          include: {
-            creator: {
-              select: {
-                name: true,
-                profile_picture: true
-              }
+        for (const mark of approvedMarks) {
+          const feedbacks = await prisma.feedback.findMany({
+            where: {
+              test_id: mark.test_id,
+              student_id: userId
             },
-            student_profile: {
-              include: {
-                users: {
-                  select: {
-                    name: true,
-                    profile_picture: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: { created_at: "desc" }
-        });
-
-        if (feedbacks.length > 0) {
-          // Group feedbacks by student
-          const studentFeedbackMap: any = {};
-
-          for (const fb of feedbacks) {
-            const studentId = fb.student_id;
-            if (!studentFeedbackMap[studentId]) {
-              studentFeedbackMap[studentId] = {
-                student_id: studentId,
-                student_name: fb.student_profile.users.name,
-                student_profile_picture: fb.student_profile.users.profile_picture,
-                roll_number: fb.student_profile.roll_number,
-                feedbacks: []
-              };
-            }
-            studentFeedbackMap[studentId].feedbacks.push({
-              feedback_id: fb.feedback_id,
-              sender_role: fb.sender_role,
-              sender_name: fb.creator.name,
-              message: fb.message,
-              created_at: fb.created_at
-            });
-          }
-
-          allFeedbacks.push({
-            test_id: test.test_id,
-            test_name: test.test_name,
-            subject_name: test.subject.subject_name,
-            class_name: test.Renamedclass.class_name,
-            section_name: test.section.section_name,
-            date_conducted: test.date_conducted.toISOString().split('T')[0],
-            max_marks: test.max_marks,
-            students: Object.values(studentFeedbackMap).map((student: any) => ({
-              ...student,
-              total_feedbacks: student.feedbacks.length
-            })),
-            total_students_with_feedback: Object.keys(studentFeedbackMap).length,
-            total_feedbacks: feedbacks.length
-          });
-        }
-      }
-
-      res.status(200).json({
-        success: true,
-        role: "Teacher",
-        data: allFeedbacks,
-        total_tests_with_feedback: allFeedbacks.length
-      });
-      return;
-    }
-
-    // =====================
-    // ADMIN RESPONSE
-    // =====================
-    if (userRole === "Admin") {
-      // Get all tests with feedbacks
-      const allTests = await prisma.test.findMany({
-        select: {
-          test_id: true,
-          test_name: true,
-          max_marks: true,
-          date_conducted: true,
-          subject: {
-            select: {
-              subject_name: true
-            }
-          },
-          Renamedclass: {
-            select: {
-              class_name: true
-            }
-          },
-          section: {
-            select: {
-              section_name: true
-            }
-          },
-          teacher_profile: {
             include: {
-              users: {
+              creator: {
                 select: {
-                  name: true
+                  name: true,
+                  profile_picture: true
                 }
+              }
+            },
+            orderBy: { created_at: "desc" }
+          });
+
+          if (feedbacks.length > 0) {
+            const percentage = (mark.marks_obtained / mark.test.max_marks) * 100;
+            
+            allFeedbacks.push({
+              test_id: mark.test_id,
+              test_name: mark.test.test_name,
+              subject_name: mark.test.subject.subject_name,
+              teacher_name: mark.test.teacher_profile.users.name,
+              date_conducted: mark.test.date_conducted.toISOString().split('T')[0],
+              marks_obtained: mark.marks_obtained,
+              max_marks: mark.test.max_marks,
+              percentage: parseFloat(percentage.toFixed(2)),
+              feedbacks: feedbacks.map(fb => ({
+                feedback_id: fb.feedback_id,
+                sender_role: fb.sender_role,
+                sender_name: fb.creator.name,
+                message: fb.message,
+                created_at: fb.created_at,
+                is_my_reply: fb.sender_role === "Student"
+              })),
+              total_feedbacks: feedbacks.length
+            });
+          }
+        }
+
+        res.status(200).json({
+          success: true,
+          role: "Student",
+          data: allFeedbacks,
+          total_tests_with_feedback: allFeedbacks.length
+        });
+        return;
+      }
+
+      // =====================
+      // TEACHER RESPONSE
+      // =====================
+      if (userRole === "Teacher") {
+        const teacherTests = await prisma.test.findMany({
+          where: {
+            created_by: userId
+          },
+          select: {
+            test_id: true,
+            test_name: true,
+            max_marks: true,
+            date_conducted: true,
+            subject: {
+              select: {
+                subject_name: true
+              }
+            },
+            Renamedclass: {
+              select: {
+                class_name: true
+              }
+            },
+            section: {
+              select: {
+                section_name: true
               }
             }
           }
-        }
-      });
+        });
 
-      const allFeedbacks = [];
+        const allFeedbacks = [];
 
-      for (const test of allTests) {
-        const feedbacks = await prisma.feedback.findMany({
-          where: {
-            test_id: test.test_id
-          },
-          include: {
-            creator: {
-              select: {
-                name: true,
-                profile_picture: true
+        for (const test of teacherTests) {
+          const feedbacks = await prisma.feedback.findMany({
+            where: {
+              test_id: test.test_id
+            },
+            include: {
+              creator: {
+                select: {
+                  name: true,
+                  profile_picture: true
+                }
+              },
+              student_profile: {
+                include: {
+                  users: {
+                    select: {
+                      name: true,
+                      profile_picture: true
+                    }
+                  }
+                }
               }
             },
-            student_profile: {
+            orderBy: { created_at: "desc" }
+          });
+
+          if (feedbacks.length > 0) {
+            const studentFeedbackMap: any = {};
+
+            for (const fb of feedbacks) {
+              const studentId = fb.student_id;
+              if (!studentFeedbackMap[studentId]) {
+                studentFeedbackMap[studentId] = {
+                  student_id: studentId,
+                  student_name: fb.student_profile.users.name,
+                  student_profile_picture: fb.student_profile.users.profile_picture,
+                  roll_number: fb.student_profile.roll_number,
+                  feedbacks: []
+                };
+              }
+              studentFeedbackMap[studentId].feedbacks.push({
+                feedback_id: fb.feedback_id,
+                sender_role: fb.sender_role,
+                sender_name: fb.creator.name,
+                message: fb.message,
+                created_at: fb.created_at
+              });
+            }
+
+            allFeedbacks.push({
+              test_id: test.test_id,
+              test_name: test.test_name,
+              subject_name: test.subject.subject_name,
+              class_name: test.Renamedclass.class_name,
+              section_name: test.section.section_name,
+              date_conducted: test.date_conducted.toISOString().split('T')[0],
+              max_marks: test.max_marks,
+              students: Object.values(studentFeedbackMap).map((student: any) => ({
+                ...student,
+                total_feedbacks: student.feedbacks.length
+              })),
+              total_students_with_feedback: Object.keys(studentFeedbackMap).length,
+              total_feedbacks: feedbacks.length
+            });
+          }
+        }
+
+        res.status(200).json({
+          success: true,
+          role: "Teacher",
+          data: allFeedbacks,
+          total_tests_with_feedback: allFeedbacks.length
+        });
+        return;
+      }
+
+      // =====================
+      // ADMIN RESPONSE
+      // =====================
+      if (userRole === "Admin") {
+        const allTests = await prisma.test.findMany({
+          select: {
+            test_id: true,
+            test_name: true,
+            max_marks: true,
+            date_conducted: true,
+            subject: {
+              select: {
+                subject_name: true
+              }
+            },
+            Renamedclass: {
+              select: {
+                class_name: true
+              }
+            },
+            section: {
+              select: {
+                section_name: true
+              }
+            },
+            teacher_profile: {
               include: {
                 users: {
                   select: {
-                    name: true,
-                    profile_picture: true
+                    name: true
                   }
                 }
               }
             }
-          },
-          orderBy: { created_at: "desc" }
+          }
         });
 
-        if (feedbacks.length > 0) {
-          // Group by student
-          const studentFeedbackMap: any = {};
+        const allFeedbacks = [];
 
-          for (const fb of feedbacks) {
-            const studentId = fb.student_id;
-            if (!studentFeedbackMap[studentId]) {
-              studentFeedbackMap[studentId] = {
-                student_id: studentId,
-                student_name: fb.student_profile.users.name,
-                roll_number: fb.student_profile.roll_number,
-                feedbacks: []
-              };
+        for (const test of allTests) {
+          const feedbacks = await prisma.feedback.findMany({
+            where: {
+              test_id: test.test_id
+            },
+            include: {
+              creator: {
+                select: {
+                  name: true,
+                  profile_picture: true
+                }
+              },
+              student_profile: {
+                include: {
+                  users: {
+                    select: {
+                      name: true,
+                      profile_picture: true
+                    }
+                  }
+                }
+              }
+            },
+            orderBy: { created_at: "desc" }
+          });
+
+          if (feedbacks.length > 0) {
+            const studentFeedbackMap: any = {};
+
+            for (const fb of feedbacks) {
+              const studentId = fb.student_id;
+              if (!studentFeedbackMap[studentId]) {
+                studentFeedbackMap[studentId] = {
+                  student_id: studentId,
+                  student_name: fb.student_profile.users.name,
+                  roll_number: fb.student_profile.roll_number,
+                  feedbacks: []
+                };
+              }
+              studentFeedbackMap[studentId].feedbacks.push({
+                feedback_id: fb.feedback_id,
+                sender_role: fb.sender_role,
+                sender_name: fb.creator.name,
+                message: fb.message,
+                created_at: fb.created_at
+              });
             }
-            studentFeedbackMap[studentId].feedbacks.push({
-              feedback_id: fb.feedback_id,
-              sender_role: fb.sender_role,
-              sender_name: fb.creator.name,
-              message: fb.message,
-              created_at: fb.created_at
+
+            const feedbackBreakdown = {
+              system: feedbacks.filter(fb => fb.sender_role === "System").length,
+              teacher: feedbacks.filter(fb => fb.sender_role === "Teacher").length,
+              admin: feedbacks.filter(fb => fb.sender_role === "Admin").length,
+              student: feedbacks.filter(fb => fb.sender_role === "Student").length
+            };
+
+            allFeedbacks.push({
+              test_id: test.test_id,
+              test_name: test.test_name,
+              subject_name: test.subject.subject_name,
+              teacher_name: test.teacher_profile.users.name,
+              class_name: test.Renamedclass.class_name,
+              section_name: test.section.section_name,
+              date_conducted: test.date_conducted.toISOString().split('T')[0],
+              max_marks: test.max_marks,
+              students: Object.values(studentFeedbackMap).map((student: any) => ({
+                ...student,
+                total_feedbacks: student.feedbacks.length
+              })),
+              feedback_breakdown: feedbackBreakdown,
+              total_students_with_feedback: Object.keys(studentFeedbackMap).length,
+              total_feedbacks: feedbacks.length
             });
           }
-
-          // Feedback breakdown
-          const feedbackBreakdown = {
-            system: feedbacks.filter(fb => fb.sender_role === "System").length,
-            teacher: feedbacks.filter(fb => fb.sender_role === "Teacher").length,
-            admin: feedbacks.filter(fb => fb.sender_role === "Admin").length,
-            student: feedbacks.filter(fb => fb.sender_role === "Student").length
-          };
-
-          allFeedbacks.push({
-            test_id: test.test_id,
-            test_name: test.test_name,
-            subject_name: test.subject.subject_name,
-            teacher_name: test.teacher_profile.users.name,
-            class_name: test.Renamedclass.class_name,
-            section_name: test.section.section_name,
-            date_conducted: test.date_conducted.toISOString().split('T')[0],
-            max_marks: test.max_marks,
-            students: Object.values(studentFeedbackMap).map((student: any) => ({
-              ...student,
-              total_feedbacks: student.feedbacks.length
-            })),
-            feedback_breakdown: feedbackBreakdown,
-            total_students_with_feedback: Object.keys(studentFeedbackMap).length,
-            total_feedbacks: feedbacks.length
-          });
         }
+
+        console.log(allFeedbacks, "all feedbacks data");
+
+        res.status(200).json({
+          success: true,
+          role: "Admin",
+          data: allFeedbacks,
+          total_tests_with_feedback: allFeedbacks.length
+        });
+        return;
       }
-console.log(allFeedbacks,"vijdsfsdlk")
-      res.status(200).json({
-        success: true,
-        role: "Admin",
-        data: allFeedbacks,
-        total_tests_with_feedback: allFeedbacks.length
-      });
-      return;
+
+      res.status(403).json({ error: "Invalid role" });
+    } catch (error) {
+      console.error("Error getting all feedbacks:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
-
-    res.status(403).json({ error: "Invalid role" });
-  } catch (error) {
-    console.error("Error getting all feedbacks:", error);
-    res.status(500).json({ error: "Internal server error" });
   }
-}
-
 };

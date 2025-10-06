@@ -193,11 +193,10 @@
 // };
 
 
-
 import { Response } from "express";
 import prisma from '../db/prisma';
 import { RequestWithUser } from "../middleware/auth";
-import { io } from "../server"; 
+import { sendBulkNotifications } from "../util/sendNotifcationfireBase";
 
 export const createTestAndNotifyStudents = async (req: RequestWithUser, res: Response): Promise<void> => {
   if (!req.user) {
@@ -272,39 +271,60 @@ export const createTestAndNotifyStudents = async (req: RequestWithUser, res: Res
       });
 
       if (studentsInSection.length > 0) {
-        const notification = {
-          title: `📝 New Test Scheduled: ${test_name}`,
-          message: `${test_name} (${newTest.subject.subject_name}) has been scheduled for ${new Date(date_conducted).toLocaleDateString()}. Max Marks: ${max_marks}. ${newTest.Renamedclass.class_name} - ${newTest.section.section_name}`,
-          test_id: newTest.test_id,
-          section_id: section_id,
-        };
+        const notificationTitle = `📝 New Test Scheduled: ${test_name}`;
+        const notificationMessage = `${test_name} (${newTest.subject.subject_name}) has been scheduled for ${new Date(date_conducted).toLocaleDateString()}. Max Marks: ${max_marks}. ${newTest.Renamedclass.class_name} - ${newTest.section.section_name}`;
 
         const notificationData = studentsInSection.map(student => ({
           user_id: student.student_id,
-          title: notification.title,
-          message: notification.message,
+          title: notificationTitle,
+          message: notificationMessage,
+          is_read: false,
         }));
 
         await tx.notifications.createMany({
           data: notificationData,
         });
 
-        // 🔥 SOCKET.IO: Send real-time notifications to all students in the section
-        studentsInSection.forEach((student) => {
-          io.to(`user_${student.student_id}`).emit("new_notification", {
-            title: notification.title,
-            message: notification.message,
-            type: "test_created",
-            test_id: newTest.test_id,
-            test_name: test_name,
-            subject: newTest.subject.subject_name,
-            date_conducted: new Date(date_conducted),
-            max_marks: max_marks,
-            created_at: new Date(),
-          });
+        // 🔥 FIREBASE FCM: Get students with push tokens
+        const studentUserIds = studentsInSection.map(s => s.student_id);
+        
+        const studentsWithTokens = await tx.users.findMany({
+          where: {
+            user_id: { in: studentUserIds },
+            push_token: { not: null },
+          },
+          select: {
+            user_id: true,
+            push_token: true,
+          },
         });
 
-        console.log(`✅ Notified ${studentsInSection.length} students about new test: ${test_name}`);
+        const pushTokens = studentsWithTokens
+          .map(u => u.push_token)
+          .filter((token): token is string => token !== null);
+
+        if (pushTokens.length > 0) {
+          // Send Firebase push notifications
+          await sendBulkNotifications({
+            tokens: pushTokens,
+            title: notificationTitle,
+            body: notificationMessage,
+            data: {
+              type: "test_created",
+              test_id: newTest.test_id.toString(),
+              test_name: test_name,
+              subject: newTest.subject.subject_name,
+              date_conducted: new Date(date_conducted).toISOString(),
+              max_marks: max_marks.toString(),
+              class_id: class_id.toString(),
+              section_id: section_id.toString(),
+            },
+          });
+
+          console.log(`✅ Firebase notifications sent to ${pushTokens.length}/${studentsInSection.length} students about new test: ${test_name}`);
+        } else {
+          console.log(`⚠️  No students with push tokens found for test: ${test_name}`);
+        }
       }
 
       return newTest;
