@@ -1095,7 +1095,7 @@ getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
           });
         }
       }
-
+console.log(allFeedbacks)
       res.status(200).json({
         success: true,
         role: "Admin",
