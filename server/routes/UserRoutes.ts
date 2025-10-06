@@ -76,7 +76,6 @@ userRouter.post("/edit-feedback", authenticate, feedbackController.editFeedback)
 // Student replies to any feedback
 userRouter.post("/reply-feedback", authenticate, feedbackController.replyToFeedback);
 
-// Student gets all their feedbacks across all tests
 userRouter.get("/my-feedbacks", authenticate, feedbackController.getAllFeedbacks);
 
 

@@ -773,7 +773,7 @@ getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
     const userRole = req.user?.role;
-
+console.log(userRole,"role hai bhai")
     if (!userId || !userRole) {
       res.status(401).json({ error: "Unauthorized" });
       return;
@@ -1095,7 +1095,7 @@ getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
           });
         }
       }
-console.log(allFeedbacks)
+console.log(allFeedbacks,"vijdsfsdlk")
       res.status(200).json({
         success: true,
         role: "Admin",
