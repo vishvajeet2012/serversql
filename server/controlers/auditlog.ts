@@ -4,7 +4,6 @@ import { RequestWithUser } from "../middleware/auth";
 import prisma from "../db/prisma";
 
 export const auditLogController = {
-  // Get All Audit Logs (Simple - Admin Only)
   getAllAuditLogs: async (req: RequestWithUser, res: Response): Promise<void> => {
     try {
       const userRole = req.user?.role;

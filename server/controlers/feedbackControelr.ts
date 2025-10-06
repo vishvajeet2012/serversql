@@ -768,20 +768,24 @@ export const feedbackController = {
     }
   },
 
-  getMyAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
-    try {
-      const studentId = req.user?.userId;
-      const userRole = req.user?.role;
+ // 5️⃣ Get All Feedbacks (Universal - Role-based)
+getAllFeedbacks: async (req: RequestWithUser, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
 
-      if (!studentId || userRole !== "Student") {
-        res.status(403).json({ error: "Only students can access this endpoint" });
-        return;
-      }
+    if (!userId || !userRole) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
 
-      // Get all approved marks for student
+    // =====================
+    // STUDENT RESPONSE
+    // =====================
+    if (userRole === "Student") {
       const approvedMarks = await prisma.marks.findMany({
         where: {
-          student_id: studentId,
+          student_id: userId,
           status: "Approved"
         },
         include: {
@@ -795,6 +799,15 @@ export const feedbackController = {
                 select: {
                   subject_name: true
                 }
+              },
+              teacher_profile: {
+                include: {
+                  users: {
+                    select: {
+                      name: true
+                    }
+                  }
+                }
               }
             }
           }
@@ -807,7 +820,7 @@ export const feedbackController = {
         const feedbacks = await prisma.feedback.findMany({
           where: {
             test_id: mark.test_id,
-            student_id: studentId
+            student_id: userId
           },
           include: {
             creator: {
@@ -827,6 +840,7 @@ export const feedbackController = {
             test_id: mark.test_id,
             test_name: mark.test.test_name,
             subject_name: mark.test.subject.subject_name,
+            teacher_name: mark.test.teacher_profile.users.name,
             date_conducted: mark.test.date_conducted.toISOString().split('T')[0],
             marks_obtained: mark.marks_obtained,
             max_marks: mark.test.max_marks,
@@ -846,12 +860,256 @@ export const feedbackController = {
 
       res.status(200).json({
         success: true,
+        role: "Student",
         data: allFeedbacks,
         total_tests_with_feedback: allFeedbacks.length
       });
-    } catch (error) {
-      console.error("Error getting all feedbacks:", error);
-      res.status(500).json({ error: "Internal server error" });
+      return;
     }
+
+    // =====================
+    // TEACHER RESPONSE
+    // =====================
+    if (userRole === "Teacher") {
+      // Get all tests created by teacher
+      const teacherTests = await prisma.test.findMany({
+        where: {
+          created_by: userId
+        },
+        select: {
+          test_id: true,
+          test_name: true,
+          max_marks: true,
+          date_conducted: true,
+          subject: {
+            select: {
+              subject_name: true
+            }
+          },
+          Renamedclass: {
+            select: {
+              class_name: true
+            }
+          },
+          section: {
+            select: {
+              section_name: true
+            }
+          }
+        }
+      });
+
+      const allFeedbacks = [];
+
+      for (const test of teacherTests) {
+        // Get all feedbacks for this test
+        const feedbacks = await prisma.feedback.findMany({
+          where: {
+            test_id: test.test_id
+          },
+          include: {
+            creator: {
+              select: {
+                name: true,
+                profile_picture: true
+              }
+            },
+            student_profile: {
+              include: {
+                users: {
+                  select: {
+                    name: true,
+                    profile_picture: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { created_at: "desc" }
+        });
+
+        if (feedbacks.length > 0) {
+          // Group feedbacks by student
+          const studentFeedbackMap: any = {};
+
+          for (const fb of feedbacks) {
+            const studentId = fb.student_id;
+            if (!studentFeedbackMap[studentId]) {
+              studentFeedbackMap[studentId] = {
+                student_id: studentId,
+                student_name: fb.student_profile.users.name,
+                student_profile_picture: fb.student_profile.users.profile_picture,
+                roll_number: fb.student_profile.roll_number,
+                feedbacks: []
+              };
+            }
+            studentFeedbackMap[studentId].feedbacks.push({
+              feedback_id: fb.feedback_id,
+              sender_role: fb.sender_role,
+              sender_name: fb.creator.name,
+              message: fb.message,
+              created_at: fb.created_at
+            });
+          }
+
+          allFeedbacks.push({
+            test_id: test.test_id,
+            test_name: test.test_name,
+            subject_name: test.subject.subject_name,
+            class_name: test.Renamedclass.class_name,
+            section_name: test.section.section_name,
+            date_conducted: test.date_conducted.toISOString().split('T')[0],
+            max_marks: test.max_marks,
+            students: Object.values(studentFeedbackMap).map((student: any) => ({
+              ...student,
+              total_feedbacks: student.feedbacks.length
+            })),
+            total_students_with_feedback: Object.keys(studentFeedbackMap).length,
+            total_feedbacks: feedbacks.length
+          });
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        role: "Teacher",
+        data: allFeedbacks,
+        total_tests_with_feedback: allFeedbacks.length
+      });
+      return;
+    }
+
+    // =====================
+    // ADMIN RESPONSE
+    // =====================
+    if (userRole === "Admin") {
+      // Get all tests with feedbacks
+      const allTests = await prisma.test.findMany({
+        select: {
+          test_id: true,
+          test_name: true,
+          max_marks: true,
+          date_conducted: true,
+          subject: {
+            select: {
+              subject_name: true
+            }
+          },
+          Renamedclass: {
+            select: {
+              class_name: true
+            }
+          },
+          section: {
+            select: {
+              section_name: true
+            }
+          },
+          teacher_profile: {
+            include: {
+              users: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const allFeedbacks = [];
+
+      for (const test of allTests) {
+        const feedbacks = await prisma.feedback.findMany({
+          where: {
+            test_id: test.test_id
+          },
+          include: {
+            creator: {
+              select: {
+                name: true,
+                profile_picture: true
+              }
+            },
+            student_profile: {
+              include: {
+                users: {
+                  select: {
+                    name: true,
+                    profile_picture: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { created_at: "desc" }
+        });
+
+        if (feedbacks.length > 0) {
+          // Group by student
+          const studentFeedbackMap: any = {};
+
+          for (const fb of feedbacks) {
+            const studentId = fb.student_id;
+            if (!studentFeedbackMap[studentId]) {
+              studentFeedbackMap[studentId] = {
+                student_id: studentId,
+                student_name: fb.student_profile.users.name,
+                roll_number: fb.student_profile.roll_number,
+                feedbacks: []
+              };
+            }
+            studentFeedbackMap[studentId].feedbacks.push({
+              feedback_id: fb.feedback_id,
+              sender_role: fb.sender_role,
+              sender_name: fb.creator.name,
+              message: fb.message,
+              created_at: fb.created_at
+            });
+          }
+
+          // Feedback breakdown
+          const feedbackBreakdown = {
+            system: feedbacks.filter(fb => fb.sender_role === "System").length,
+            teacher: feedbacks.filter(fb => fb.sender_role === "Teacher").length,
+            admin: feedbacks.filter(fb => fb.sender_role === "Admin").length,
+            student: feedbacks.filter(fb => fb.sender_role === "Student").length
+          };
+
+          allFeedbacks.push({
+            test_id: test.test_id,
+            test_name: test.test_name,
+            subject_name: test.subject.subject_name,
+            teacher_name: test.teacher_profile.users.name,
+            class_name: test.Renamedclass.class_name,
+            section_name: test.section.section_name,
+            date_conducted: test.date_conducted.toISOString().split('T')[0],
+            max_marks: test.max_marks,
+            students: Object.values(studentFeedbackMap).map((student: any) => ({
+              ...student,
+              total_feedbacks: student.feedbacks.length
+            })),
+            feedback_breakdown: feedbackBreakdown,
+            total_students_with_feedback: Object.keys(studentFeedbackMap).length,
+            total_feedbacks: feedbacks.length
+          });
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        role: "Admin",
+        data: allFeedbacks,
+        total_tests_with_feedback: allFeedbacks.length
+      });
+      return;
+    }
+
+    res.status(403).json({ error: "Invalid role" });
+  } catch (error) {
+    console.error("Error getting all feedbacks:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
+}
+
 };
